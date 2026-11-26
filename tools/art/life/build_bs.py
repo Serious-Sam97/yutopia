@@ -599,21 +599,43 @@ def carry(per_cage):
 
 
 BW = carry(CW)
-# (a hip by the hanging hand took the hand's weights, a forearm the thigh's: the new body's own rig says
-# which is arm — no arm joint off the arm, no leg or hip joint on it)
+# (each limb's share from the new body's own heat weights — how much of a vertex is the left arm, the right
+# arm, each leg, the trunk — and within each, the joints in the cage's proportions: the flank under a raised
+# arm read the cage's shoulder and tore into spikes, a hip by the hanging hand read the hand)
 bs_arm = sum(Wt[:, names.index(f"{b}.{S_}")] for b in ("upper", "fore", "hand") for S_ in "LR")
-ARMJ = [i for i, n in enumerate(JOINT_NAMES) if n.startswith(("elbow", "forearm", "wrist", "fingers", "index", "thumb", "ring", "little"))]
-LEGJ = [i for i, n in enumerate(JOINT_NAMES) if n.startswith(("thigh", "knee", "ankle", "toe", "hips", "skirt"))]
-off_arm = bs_arm < 0.35
-BW[np.ix_(off_arm, ARMJ)] = 0
-on_arm = bs_arm > 0.75
-BW[np.ix_(on_arm, LEGJ)] = 0
-# (and each side's own: no left joint on the right)
-for i, n in enumerate(JOINT_NAMES):
-    if n.endswith("L"):
-        BW[P[:, 0] < -0.01, i] = 0
-    elif n.endswith("R") and n not in ("chestR",):
-        BW[P[:, 0] > 0.01, i] = 0
+GROUPS = {}
+for S_ in "LR":
+    GROUPS[f"arm{S_}"] = ([i for i, n in enumerate(JOINT_NAMES) if n.endswith(S_) and n.startswith(("shoulder", "elbow", "forearm", "wrist", "fingers", "index", "thumb", "ring", "little"))],
+                         sum(Wt[:, names.index(f"{b}.{S_}")] for b in ("upper", "fore", "hand")),
+                         {"upper": f"shoulder{S_}", "fore": f"elbow{S_}", "hand": f"wrist{S_}"}, S_)
+    GROUPS[f"leg{S_}"] = ([i for i, n in enumerate(JOINT_NAMES) if n.endswith(S_) and n.startswith(("thigh", "knee", "ankle", "toe"))],
+                         sum(Wt[:, names.index(f"{b}.{S_}")] for b in ("thigh", "shin", "foot")),
+                         {"thigh": f"thigh{S_}", "shin": f"knee{S_}", "foot": f"ankle{S_}"}, S_)
+limb_idx = sorted({i for g in GROUPS.values() for i in g[0]})
+torso_idx = [i for i in range(len(JOINT_NAMES)) if i not in limb_idx]
+torso_mass = np.clip(1 - sum(g[1] for g in GROUPS.values()), 0, 1)
+NW = np.zeros_like(BW)
+
+
+def share(idx, mass, fallback):
+    sub_ = BW[:, idx]
+    tot = sub_.sum(1, keepdims=True)
+    have = tot[:, 0] > 1e-4
+    out = np.where(have[:, None], sub_ / np.maximum(tot, 1e-9), 0)
+    NW[:, idx] += out * mass[:, None]
+    # (no joint of this group in the cage's weights here: its main joint for that part of the limb)
+    lack = (~have) & (mass > 1e-3)
+    for i in np.where(lack)[0]:
+        NW[i, fallback(i)] += mass[i]
+
+
+for gname, (idx, mass, main, S_) in GROUPS.items():
+    def fb(i, main=main, S_=S_):
+        bone = max(main, key=lambda b: Wt[i, names.index(f"{b}.{S_}")])
+        return JOINT_NAMES.index(main[bone])
+    share(idx, mass, fb)
+share(torso_idx, torso_mass, lambda i: JOINT_NAMES.index("chest"))
+BW = NW
 empty = BW.sum(1) < 1e-6
 BW[empty, JOINT_NAMES.index("chest")] = 1
 BW /= np.maximum(BW.sum(1, keepdims=True), 1e-9)
@@ -626,8 +648,6 @@ for _ in range(3):
     np.add.at(acc, be_[:, 0], BW[be_[:, 1]])
     np.add.at(acc, be_[:, 1], BW[be_[:, 0]])
     BW = 0.5 * BW + 0.5 * acc / np.maximum(bdeg, 1)[:, None]
-BW[np.ix_(off_arm, ARMJ)] = 0
-BW[np.ix_(on_arm, LEGJ)] = 0
 BW /= np.maximum(BW.sum(1, keepdims=True), 1e-9)
 shapes = {}
 ks = cage.data.shape_keys.key_blocks
@@ -736,6 +756,72 @@ for bname in ("slim", "broad"):
     bpy.data.objects.remove(tb)
     bpy.data.objects.remove(trig)
     print(f"  body {bname}: moves up to {np.linalg.norm(shapes[bname], axis=1).max() * 100:.1f} cm")
+
+# the other ages and builds as shapes too (plan 131 phase 3): `old` — the man at old age (MakeHuman's old
+# targets at 0.85 against his 0.18); `muscle` — the firmer twin (+0.3 muscle)
+for bname, suffix in (("old", "-old"), ("muscle", "-def")):
+    twin = MH_BLEND.replace(".blend", f"{suffix}.blend")
+    if not os.path.exists(twin):
+        continue
+    with bpy.data.libraries.load(twin) as (src, dst):
+        dst.objects = ["body", "rig"]
+    tb, trig = dst.objects
+    TB = np.array([v.co for v in tb.data.vertices])
+    shapes[bname] = carry(TB - C0)
+    bpy.data.objects.remove(tb)
+    bpy.data.objects.remove(trig)
+    print(f"  {bname}: moves up to {np.linalg.norm(shapes[bname], axis=1).max() * 100:.1f} cm")
+
+# the face's axes (F2: every person their own face): MakeHuman's paired targets, each one shape — half the
+# "incr" less half the "decr", so −1…1 runs from one to the other — carried across like the rest
+MH_T = os.path.join(os.path.expanduser("~/Developer/projects/yondra/yutopia-art-src"), "mh/makehuman/data/targets")
+FACE_AXES = {
+    "fNoseW": ("nose/nose-scale-horiz-incr", "nose/nose-scale-horiz-decr"),
+    "fNoseL": ("nose/nose-scale-vert-incr", "nose/nose-scale-vert-decr"),
+    "fNoseHump": ("nose/nose-hump-incr", "nose/nose-hump-decr"),
+    "fNoseTip": ("nose/nose-point-up", "nose/nose-point-down"),
+    "fNostrils": ("nose/nose-flaring-incr", "nose/nose-flaring-decr"),
+    "fJawW": ("chin/chin-width-incr", "chin/chin-width-decr"),
+    "fChinOut": ("chin/chin-prominent-incr", "chin/chin-prominent-decr"),
+    "fChinH": ("chin/chin-height-incr", "chin/chin-height-decr"),
+    "fCheekBones": ("cheek/{s}-cheek-bones-incr", "cheek/{s}-cheek-bones-decr"),
+    "fCheekFull": ("cheek/{s}-cheek-volume-incr", "cheek/{s}-cheek-volume-decr"),
+    "fEyeSize": ("eyes/{s}-eye-scale-incr", "eyes/{s}-eye-scale-decr"),
+    "fEyeTilt": ("eyes/{s}-eye-corner2-up", "eyes/{s}-eye-corner2-down"),
+    "fEyeOpen": ("eyes/{s}-eye-height2-incr", "eyes/{s}-eye-height2-decr"),
+    "fBrowH": ("eyebrows/eyebrows-trans-up", "eyebrows/eyebrows-trans-down"),
+    "fBrowAngle": ("eyebrows/eyebrows-angle-up", "eyebrows/eyebrows-angle-down"),
+    "fMouthW": ("mouth/mouth-scale-horiz-incr", "mouth/mouth-scale-horiz-decr"),
+    "fLipUpper": ("mouth/mouth-upperlip-volume-incr", "mouth/mouth-upperlip-volume-decr"),
+    "fLipLower": ("mouth/mouth-lowerlip-volume-incr", "mouth/mouth-lowerlip-volume-decr"),
+    "fFaceFat": ("head/head-fat-incr", "head/head-fat-decr"),
+    "fHeadLong": ("head/head-scale-vert-incr", "head/head-scale-vert-decr"),
+    "fEarSize": ("ears/{s}-ear-scale-incr", "ears/{s}-ear-scale-decr"),
+    "fEarOut": ("ears/{s}-ear-flap-incr", "ears/{s}-ear-flap-decr"),
+}
+
+
+def target_delta(rel):
+    d = np.zeros_like(C0)
+    for side in ("l", "r") if "{s}" in rel else ("",):
+        path = os.path.join(MH_T, rel.replace("{s}", side) + ".target")
+        if not os.path.exists(path):
+            print("  (no target)", path)
+            continue
+        for line in open(path):
+            q = line.split()
+            if len(q) != 4 or line.startswith("#"):
+                continue
+            i = int(q[0])
+            if i < len(d):
+                dx, dy, dz = float(q[1]), float(q[2]), float(q[3])
+                d[i] += np.array([dx, -dz, dy]) * 0.1  # (MakeHuman's dm, y up, facing +z → Blender's)
+    return d
+
+
+for name, (inc, dec) in FACE_AXES.items():
+    shapes[name] = carry(0.5 * (target_delta(inc) - target_delta(dec)))
+print(f"  face axes: {len(FACE_AXES)} shapes, up to {max(np.linalg.norm(shapes[n], axis=1).max() for n in FACE_AXES) * 1000:.0f} mm")
 
 # blinking on this lid (MakeHuman's lid move on another lid's shape closed it half way): each lid turned
 # about the eyeball's centre, the margin all the way to where the lids meet, fading out over a centimetre
@@ -873,6 +959,36 @@ for part in PARTS:
                 v.co = Vector(moved[j] + jm[j])
     set_coords(part, moved)
 
+# (the variety shapes smoothed over the new body's own edges: a vertex deep in a nostril or a lid's fold read a
+# far cage point and tore — each shape's move made smooth, as a sculpted morph is)
+_E = np.array([(e.vertices[0], e.vertices[1]) for e in low.data.edges])
+_deg = np.bincount(_E.ravel(), minlength=len(P)).astype(float)
+VARIETY = [n for n in [*FACE_AXES, "old", "muscle", "slim", "broad"] if n in shapes]
+for n in VARIETY:
+    X = shapes[n]
+    for _ in range(4):
+        acc = np.zeros_like(X)
+        np.add.at(acc, _E[:, 0], X[_E[:, 1]])
+        np.add.at(acc, _E[:, 1], X[_E[:, 0]])
+        X = 0.5 * X + 0.5 * acc / np.maximum(_deg, 1)[:, None]
+    shapes[n] = X
+
+# (the brows and lashes ride the face's axes and ages with the skin they sit on: each vertex its nearest skin
+# vertex's move)
+skin_kd = KDTree(len(P))
+for i, x in enumerate(P):
+    skin_kd.insert(Vector(x), i)
+skin_kd.balance()
+for pn in ("brows", "lashes"):
+    part = bpy.data.objects[pn]
+    Pp = coords(part)
+    nn = np.array([skin_kd.find(Vector(x))[1] for x in Pp])
+    for name in [*FACE_AXES, "old", "muscle"]:
+        if name not in shapes:
+            continue
+        kb = part.shape_key_add(name=name)
+        kb.data.foreach_set("co", (Pp + shapes[name][nn]).ravel())
+
 # the eyes: Blender Studio's own (they fit its sockets), one mesh, each on its eye's joint; the iris painted
 # by the angle off the eye's forward
 old_eyes = bpy.data.objects["eyes"]
@@ -919,6 +1035,39 @@ col = np.where((ang < 9.5)[..., None], 0.015, col)
 eimg = M.image("eye-iris", size=512)
 M.put(eimg, np.concatenate([col, np.ones(ang.shape)[..., None]], -1))
 eyes.data.materials.append(M.mat("eyes", img=M.on_disk(eimg), rough=0.3))
+# (the teeth and the tongue moved by the mouth under every variety shape — the mean move of the skin round the
+# lips: an old face drops a few centimetres and left them standing through the nose)
+mouth_ring = np.where(np.linalg.norm(P - front, axis=1) < 0.035)[0]
+for pn in ("teeth", "tongue"):
+    part = bpy.data.objects.get(pn)
+    if part is None:
+        continue
+    T0 = coords(part)
+    for n in VARIETY:
+        kb = part.shape_key_add(name=n)
+        kb.data.foreach_set("co", (T0 + shapes[n][mouth_ring].mean(0)).ravel())
+
+# (each eye moved by its socket — the mean move of the skin round it — under every variety shape: with the face's
+# shapes alone an old face left its eyeballs standing out of the lids)
+E0 = np.array([tuple(v.co) for v in eyes.data.vertices])
+eyes.shape_key_add(name="Basis")
+eside = np.array([1 if g_ == "L" else -1 for g_ in eg])
+for n in VARIETY:
+    kb = eyes.shape_key_add(name=n)
+    moved = E0.copy()
+    for S_, sx in (("L", 1), ("R", -1)):
+        c = eye_c[S_]
+        ring_ = np.where((np.linalg.norm(P - c, axis=1) < EYE_R[S_] + 0.012) & (np.linalg.norm(P - c, axis=1) > EYE_R[S_] - 0.002))[0]
+        mv = shapes[n][ring_].mean(0)
+        sel = eside == sx
+        sc_ = 1.0
+        if n == "fEyeSize":
+            # (the socket's growth: how much further its ring stands from the centre)
+            r0 = np.linalg.norm(P[ring_] - c, axis=1).mean()
+            r1 = np.linalg.norm(P[ring_] + shapes[n][ring_] - (c + mv), axis=1).mean()
+            sc_ = r1 / r0
+        moved[sel] = c + mv + (E0[sel] - c) * sc_
+    kb.data.foreach_set("co", moved.ravel())
 bpy.data.objects.remove(eyeL)
 bpy.data.objects.remove(eyeR)
 if os.environ.get("BS_NO_TONGUE"):
@@ -1133,6 +1282,110 @@ M.put(alb, S_)
 if DEBUG:
     M.save_png(alb, os.path.join(DEBUG, f"bs-{WHO}-albedo.png"))
 skin_mean = S_[..., :3][(mask < 0.5) & (S_[..., :3].sum(-1) > 0.15)].mean(0)
+
+# ---- 5b. correctives (F5a): each joint at a hard bend, linear blend skinning against a delta mush of it (the
+# deformed body smoothed, the rest body's detail laid back on in each vertex's own frame — no pinch, the volume
+# kept), the difference stored in the rest pose as a shape the game turns on by the joint's angle
+FACES = [list(p_.vertices) for p_ in low.data.polygons]
+EDG = np.array([(e.vertices[0], e.vertices[1]) for e in low.data.edges])
+EDEG = np.bincount(EDG.ravel(), minlength=len(P)).astype(float)
+first_nb = np.full(len(P), -1)
+for a_, b_ in EDG:
+    if first_nb[a_] < 0:
+        first_nb[a_] = b_
+    if first_nb[b_] < 0:
+        first_nb[b_] = a_
+
+
+def lap(X, it=10):
+    for _ in range(it):
+        acc = np.zeros_like(X)
+        np.add.at(acc, EDG[:, 0], X[EDG[:, 1]])
+        np.add.at(acc, EDG[:, 1], X[EDG[:, 0]])
+        X = 0.5 * X + 0.5 * acc / np.maximum(EDEG, 1)[:, None]
+    return X
+
+
+def frames(X):
+    N = np.zeros_like(X)
+    for f in FACES:
+        a, b, c = X[f[0]], X[f[1]], X[f[2]]
+        n = np.cross(b - a, c - a)
+        if len(f) == 4:
+            n = n + np.cross(c - a, X[f[3]] - a)
+        N[f] += n
+    N /= np.maximum(np.linalg.norm(N, axis=1, keepdims=True), 1e-12)
+    T = X[first_nb] - X
+    T -= N * (T * N).sum(1, keepdims=True)
+    T /= np.maximum(np.linalg.norm(T, axis=1, keepdims=True), 1e-12)
+    return T, np.cross(N, T), N
+
+
+S_rest = lap(P)
+Tr, Br, Nr = frames(S_rest)
+DR = P - S_rest
+DLOC = np.stack([(DR * Tr).sum(1), (DR * Br).sum(1), (DR * Nr).sum(1)], 1)
+PAR = {b.name: (b.parent.name if b.parent else None) for b in rig.data.bones}
+
+
+def subtree(j):
+    out = {j}
+    grow = True
+    while grow:
+        grow = False
+        for n, par in PAR.items():
+            if par in out and n not in out:
+                out.add(n)
+                grow = True
+    return out
+
+
+def corrective(j, rest_dir, target_dir, radius):
+    J0 = BJ[j]
+    R = between(rest_dir, target_dir)
+    wsub = BW[:, [JOINT_NAMES.index(n) for n in subtree(j) if n in JOINT_NAMES]].sum(1)
+    Q = P + wsub[:, None] * ((P - J0) @ R.T + J0 - P)
+    Sq = lap(Q)
+    Tq, Bq, Nq = frames(Sq)
+    DM = Sq + DLOC[:, :1] * Tq + DLOC[:, 1:2] * Bq + DLOC[:, 2:] * Nq
+    d = np.linalg.norm(P - J0, axis=1)
+    m = M.sstep(radius, radius * 0.45, d)[:, None]
+    target = Q + m * (DM - Q)
+    # (back into the rest pose: the skin's linear part at each vertex undone)
+    out = np.zeros_like(P)
+    I3 = np.eye(3)
+    for i in np.where(m[:, 0] > 1e-3)[0]:
+        Mv = (1 - wsub[i]) * I3 + wsub[i] * R
+        # (a blend half way round 150° is nearly singular: a least-squares inverse, damped, and each move capped —
+        # an undamped solve threw vertices tens of centimetres)
+        u_, sv, vt = np.linalg.svd(Mv)
+        inv = vt.T @ np.diag(sv / (sv * sv + 0.04)) @ u_.T
+        out[i] = inv @ (target[i] - Q[i])
+    n_ = np.linalg.norm(out, axis=1, keepdims=True)
+    out *= np.minimum(1, 0.03 / np.maximum(n_, 1e-9))
+    return out
+
+
+def turn_toward(v, toward, deg):
+    """v turned `deg` toward the direction `toward` (in their plane)."""
+    v = v / np.linalg.norm(v)
+    t = toward - v * (toward @ v)
+    t /= np.linalg.norm(t)
+    a = math.radians(deg)
+    return v * math.cos(a) + t * math.sin(a)
+
+
+FWD = np.array([0.0, -1.0, 0.0])
+for S_, sx in (("L", 1), ("R", -1)):
+    up = BJ[f"elbow{S_}"] - BJ[f"shoulder{S_}"]
+    shapes[f"cShoulder{S_}"] = corrective(f"shoulder{S_}", up, turn_toward(up, np.array([sx, 0, 0.2]), 150), 0.16)
+    fo = BJ[f"wrist{S_}"] - BJ[f"elbow{S_}"]
+    shapes[f"cElbow{S_}"] = corrective(f"elbow{S_}", fo, turn_toward(fo, FWD, 130), 0.1)
+    th = BJ[f"knee{S_}"] - BJ[f"thigh{S_}"]
+    shapes[f"cHip{S_}"] = corrective(f"thigh{S_}", th, turn_toward(th, FWD, 100), 0.16)
+    sh = BJ[f"ankle{S_}"] - BJ[f"knee{S_}"]
+    shapes[f"cKnee{S_}"] = corrective(f"knee{S_}", sh, turn_toward(sh, -FWD, 130), 0.11)
+print(f"  correctives: {[(k, round(float(np.linalg.norm(shapes[k], axis=1).max()) * 100, 1)) for k in shapes if k.startswith('c')]} (cm)")
 
 # ---- 6. the new body in the cage's place, written as the people are
 low.data.materials.clear()

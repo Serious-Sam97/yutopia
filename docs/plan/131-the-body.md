@@ -380,7 +380,7 @@ Seen in the world (for later phases):
 - The new file carries no wardrobe yet, so the men stand in the painted shorts (phase 5).
 - A crawling man's arm smeared in streaks: extreme poses (phase 2's rig).
 
-## Phase 2 — the rig (in progress, 2026-11-26)
+## Phase 2 — the rig (done, 2026-11-26)
 
 2a built:
 - **The cage's fingers aligned before the wrap.** The new hand's far end is clustered into five fingertips
@@ -398,3 +398,51 @@ Left in phase 2:
   baked as pose-space shapes in build_bs.py.
 - **Upper-arm twists, and elbow, knee and hip correctives.**
 - **Stress poses** on `/dev/anim` once it can take `?body=bs`.
+
+2b–2d built:
+- **Limb shares from the new body's own heat weights.** How much of each vertex is the left arm, the right arm,
+  each leg or the trunk comes from bone heat on the Blender Studio body; within each limb, the joints follow the
+  cage's proportions. Where the cage has none, the limb's main joint takes it. This replaced the masks. The
+  flank under a raised arm no longer tears into spikes.
+- **Correctives (F5a): `cShoulder`, `cElbow`, `cHip`, `cKnee` for each side.** Each joint is bent hard
+  (shoulder raised 150°, elbow 130°, hip 100°, knee 130°) by linear blend skinning. A delta mush of that pose is
+  the target: the deformed body smoothed, then the rest body's detail laid back on in each vertex's frame. The
+  difference is stored back in the rest pose (each vertex's skinning matrix undone), within a radius of the
+  joint. `chars/life.ts correctiveDriver` sets each weight from its joint's bend, measured in `onBeforeRender`,
+  after every pose and reach. No clip changed and no bone was added (the "clavicle" is the shoulder
+  corrective).
+- **Stress poses on the game's own rig** (`/dev/anim?look=life&body=bs`, `e2e/zz-pose131.mts BODY=bs`,
+  `design/screens/life/p131/poses-bs2/`): knees and the crouch hold their volume, the raised arms no longer tear,
+  and walking hands, fists and texting are fine. The thumb that crumpled in the walk was the plain bench's
+  (`/dev/life` poses without the hand library), not the game's.
+
+Left over:
+- AO baked at rest darkens the armpit's skin when an arm is raised.
+- No upper-arm twist bone (the forearm's from plan 78 is kept).
+- (fix) The correctives' inverse (each vertex's skinning matrix undone) was nearly singular half way round a
+  150° turn and threw vertices tens of centimetres. It is now a damped least-squares inverse, each move capped
+  at 3 cm. three's `computeBoundingBox` grows by every shape's reach, so `loadLifeBase` takes the person's top
+  from the rest positions alone (it read 2.18 m).
+
+## Phase 3 — variety (2026-11-26)
+
+- **Face axes.** 22 shapes `f…`, each half MakeHuman's "incr" target less half its "decr", read straight from
+  the .target files and carried through the cage: nose width, length, hump, tip, nostrils; jaw width; chin
+  out and height; cheekbones; cheek fullness; eye size, tilt and openness; brow height and angle; mouth
+  width; upper and lower lip; face fat; head length; ear size and ear out.
+- **Age and firmness.** `old` (MakeHuman's old targets at 0.85 against the man's 0.18: `--look gtav-old`) and
+  `muscle` (the firmer twin, +0.3). The old shape moves up to 5.7 cm (height loss included).
+- **The shapes are smoothed** over the new mesh (four passes), because a vertex deep in a nostril tore.
+- **Parts follow:**
+  - the brows and lashes by their nearest skin vertex;
+  - the eyes by their socket's ring (with size for `fEyeSize`), since an old face left the eyeballs out of the
+    lids;
+  - the teeth and tongue by the mouth's ring, since they came through the nose.
+- **From the seed.** `life-people.ts faceGenes(seed)` gives each face axis a triangular −1.3…1.3, an age (62%
+  young, 28% middle-aged, 10% old) and a firmness. `LifeLook` applies them on bind (the person's name seed, as
+  the iris); `LifePerson.setGenes` does the same for the benches; `/dev/life?style=bs&faces=N&seed=`.
+- **`PREMADE_FACES`:** classic, gentle, rugged, narrow, round, elder, for the editor (phase 6).
+- Stills: `design/screens/life/p131/faces/sheet-faces.png` (`e2e/zz-faces131.mts`). Faces read apart, but age
+  doesn't show yet: it needs the old skin (phase 4).
+- **Height (F2) is left out.** The rig's legs are fitted to `moves.ts` constants, so a scaled person would
+  break contacts and IK. That needs its own pass.

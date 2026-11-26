@@ -395,6 +395,62 @@ const IRISES: [number, string][] = [
   [0.07, "#62707a"], // grey
   [0.05, "#7a5a2a"], // amber
 ];
+/** Plan 131 (F2): a face and an age from a seed — each face axis of the new body's file (`f…`, −1…1), its age
+ *  (`old`, 0…1: most young, some middle-aged, a few old) and its build's firmness (`muscle`). The same seed gives
+ *  the same person wherever they're drawn; a file without the shapes ignores them. */
+export const FACE_AXES = [
+  "fNoseW",
+  "fNoseL",
+  "fNoseHump",
+  "fNoseTip",
+  "fNostrils",
+  "fJawW",
+  "fChinOut",
+  "fChinH",
+  "fCheekBones",
+  "fCheekFull",
+  "fEyeSize",
+  "fEyeTilt",
+  "fEyeOpen",
+  "fBrowH",
+  "fBrowAngle",
+  "fMouthW",
+  "fLipUpper",
+  "fLipLower",
+  "fFaceFat",
+  "fHeadLong",
+  "fEarSize",
+  "fEarOut",
+] as const; // fmt: skip
+export function faceGenes(seed: number): Record<string, number> {
+  // (a small PRNG of its own: mulberry32)
+  let a = (seed ^ 0x9e3779b9) >>> 0;
+  const rnd = () => {
+    a = (a + 0x6d2b79f5) >>> 0;
+    let t = a;
+    t = Math.imul(t ^ (t >>> 15), t | 1);
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+  const out: Record<string, number> = {};
+  // (triangular, −1.3…1.3: most faces near the middle, some far off it)
+  for (const k of FACE_AXES) out[k] = (rnd() + rnd() - 1) * 1.3;
+  const r = rnd();
+  out.old = r < 0.62 ? rnd() * 0.12 : r < 0.9 ? 0.3 + rnd() * 0.25 : 0.75 + rnd() * 0.25;
+  out.muscle = (rnd() - 0.4) * 0.9;
+  return out;
+}
+
+/** (plan 131 F2) premade faces to start from — the editor's (phase 6): face axes and an age; a seed fills the rest */
+export const PREMADE_FACES: Record<string, Partial<Record<(typeof FACE_AXES)[number] | "old" | "muscle", number>>> = {
+  classic: { fJawW: 0.4, fChinOut: 0.3, fNoseW: -0.2, fCheekBones: 0.4, fBrowH: -0.2 },
+  gentle: { fFaceFat: 0.4, fCheekFull: 0.5, fJawW: -0.4, fEyeSize: 0.4, fNoseTip: 0.4 },
+  rugged: { fJawW: 0.8, fChinOut: 0.6, fNoseHump: 0.7, fBrowH: -0.5, fBrowAngle: -0.4, old: 0.35 },
+  narrow: { fHeadLong: 0.8, fJawW: -0.6, fNoseL: 0.6, fNoseW: -0.5, fMouthW: -0.4 },
+  round: { fHeadLong: -0.7, fFaceFat: 0.7, fCheekFull: 0.7, fNoseW: 0.5, fChinH: -0.4 },
+  elder: { old: 0.9, fCheekFull: -0.4, fEyeOpen: -0.3, fNoseL: 0.3 },
+};
+
 export function irisOf(seed: number): Color {
   let x = ((seed >>> 0) % 1000) / 1000;
   for (const [p, hex] of IRISES) {
@@ -670,7 +726,10 @@ export async function loadLifeBase(url: string, renderer: WebGLRenderer, gender:
     g.setAttribute("skinIndex", new Uint16BufferAttribute(idx, 4));
     g.computeBoundingBox();
     g.computeBoundingSphere();
-    top = Math.max(top, g.boundingBox?.max.y ?? 0);
+    // (the top from the rest positions alone: three's box grows by every shape's reach — plan 131's ages and
+    // correctives would make a man 2.2 m tall)
+    const pa = g.getAttribute("position");
+    for (let i = 0; i < pa.count; i++) top = Math.max(top, pa.getY(i));
     // (the exporter's duplicates: "hair.001" → "hair_1")
     const name = m.name.replace(/[._]\d+$/, "");
     const material = finish(name, m.material as MeshStandardMaterial, !!g.getAttribute("color"), extras.iris ?? null);

@@ -243,6 +243,28 @@ export default function LifeBench() {
             who: `today-${g}`,
           });
         }
+        // (?faces=6&style=bs: plan 131's people, each their own face and age from a seed — faceGenes)
+        const faces = Number(q.get("faces") ?? 0);
+        if (faces > 0) {
+          const LP = await import("@/world/look/life-people");
+          for (let i = 0; i < faces; i++) {
+            const lp = await L.loadLifePerson(`/life/person-${g}-bs.glb`, renderer);
+            const seed = i * 7919 + Number(q.get("seed") ?? 1);
+            lp.setGenes(LP.faceGenes(seed));
+            shown.push({
+              root: lp.root,
+              setPose: (p, lift) => lp.setPose(p as never, lift),
+              face: (b, t, sm) => lp.setFace(b, t, sm),
+              eyes: (x, y) => lp.setEyes(x, y),
+              h: lp.height,
+              who: `${g}-face-${seed}`,
+            });
+            console.log(
+              `life face ${seed}: ${JSON.stringify(LP.faceGenes(seed), (_k, v) => (typeof v === "number" ? +v.toFixed(2) : v))}`,
+            );
+          }
+          continue;
+        }
         // (?bodies=1: each painted person slim, regular and broad — plan 73 phase 4)
         const bodies = q.get("bodies") === "1" ? ["slim", "regular", "broad"] : [""];
         for (const v of bodies[0]
@@ -289,6 +311,7 @@ export default function LifeBench() {
         // (?at=0.9: the camera's height on them, metres — the hips, the knees)
         const y = q.get("at") !== null ? Number(q.get("at")) : s.h - (bust ? 0.3 : 0.13);
         cam.position.set(s.root.position.x, y, bust ? 1.75 : 0.95);
+        console.log(`life cam: ${s.who} h ${s.h.toFixed(3)} at x ${s.root.position.x.toFixed(2)} y ${y.toFixed(3)}`);
         cam.lookAt(s.root.position.x, y - 0.01, 0);
       } else {
         const span = Math.max(1.6, shown.length * gap);

@@ -303,6 +303,8 @@ export class LifeLook {
   private M: LifeMod;
   private state: LifeState = "own";
   private u: OwnU;
+  /** (plan 131) the face, age and firmness their seed gives — the new body's shapes */
+  private genes: Record<string, number>;
 
   constructor(
     M: LifeMod,
@@ -315,6 +317,7 @@ export class LifeLook {
     /** (phase 5.4) what they wear: their wardrobe's garments, made — none, the file's own outfit */
     worn: import("../look/life-people").LifeWorn | null = null,
   ) {
+    this.genes = M.faceGenes(seed);
     this.u = {
       lifeTint: { value: new Color(1, 1, 1) },
       lifeWater: { value: -1e6 },
@@ -567,6 +570,16 @@ export class LifeLook {
       const at = sm.morphTargetDictionary[k];
       if (at !== undefined && sm.morphTargetInfluences) sm.morphTargetInfluences[at] = this.body.morph[k];
     }
+    for (const [k, v] of Object.entries(this.genes)) {
+      const at = sm.morphTargetDictionary[k];
+      if (at !== undefined && sm.morphTargetInfluences) sm.morphTargetInfluences[at] = v;
+    }
+    // (plan 131 F5a: a body with correctives — shoulder, elbow, hip, knee — turns each on by its joint's bend,
+    // measured just before it's drawn, once every pose and reach has moved the bones)
+    if (part.name === "body" && sm.morphTargetDictionary.cShoulderL !== undefined) {
+      const drive = correctiveDriver(sm);
+      if (drive) sm.onBeforeRender = drive;
+    }
   }
 
   /** Near (every part) or far (the one coarse mesh, once its file's in). Cheap to call every frame. */
@@ -707,4 +720,101 @@ function emptyOf(g: BufferGeometry): BufferGeometry {
   e.setIndex([]);
   e.boundingSphere = g.boundingSphere;
   return e;
+}
+
+// ── plan 131: correctives by the joints' bends ─────────────────────────────────────────────────────
+
+const _a = new Vector3();
+const _b = new Vector3();
+const _c = new Vector3();
+const _q = new Quaternion();
+const _m = new Matrix4();
+
+const smooth01 = (lo: number, hi: number, x: number) => {
+  const t = Math.min(1, Math.max(0, (x - lo) / (hi - lo)));
+  return t * t * (3 - 2 * t);
+};
+
+/** Each corrective's weight from its joint's bend, set before the body is drawn (null: the bones it needs are
+ *  missing). Shoulder: the upper arm's turn off its rest line in the chest's frame; elbow and knee: the bend
+ *  between their two segments past rest; hip: the thigh's turn off its rest line in the hips' frame. */
+function correctiveDriver(sm: SkinnedMesh): (() => void) | null {
+  const sk = sm.skeleton;
+  const at = (n: string) => sk.bones.findIndex((b) => b.name === n);
+  const need = [
+    "chest",
+    "hips",
+    "shoulderL",
+    "elbowL",
+    "wristL",
+    "shoulderR",
+    "elbowR",
+    "wristR",
+    "thighL",
+    "kneeL",
+    "ankleL",
+    "thighR",
+    "kneeR",
+    "ankleR",
+  ];
+  const ix: Record<string, number> = {};
+  for (const n of need) {
+    ix[n] = at(n);
+    if (ix[n] < 0) return null;
+  }
+  // the rest pose, from the bind's inverses
+  const restPos: Record<string, Vector3> = {};
+  const restRot: Record<string, Quaternion> = {};
+  for (const n of need) {
+    _m.copy(sk.boneInverses[ix[n]]).invert();
+    restPos[n] = new Vector3().setFromMatrixPosition(_m);
+    restRot[n] = new Quaternion().setFromRotationMatrix(_m);
+  }
+  const restDir = (frame: string, from: string, to: string) =>
+    restPos[to].clone().sub(restPos[from]).normalize().applyQuaternion(restRot[frame].clone().invert());
+  const restBend = (a: string, b: string, c: string) =>
+    restPos[b].clone().sub(restPos[a]).normalize().angleTo(restPos[c].clone().sub(restPos[b]).normalize());
+  const D = {
+    shL: restDir("chest", "shoulderL", "elbowL"),
+    shR: restDir("chest", "shoulderR", "elbowR"),
+    hiL: restDir("hips", "thighL", "kneeL"),
+    hiR: restDir("hips", "thighR", "kneeR"),
+    elL: restBend("shoulderL", "elbowL", "wristL"),
+    elR: restBend("shoulderR", "elbowR", "wristR"),
+    knL: restBend("thighL", "kneeL", "ankleL"),
+    knR: restBend("thighR", "kneeR", "ankleR"),
+  };
+  const dict = sm.morphTargetDictionary ?? {};
+  const pos = (n: string, v: Vector3) => v.setFromMatrixPosition(sk.bones[ix[n]].matrixWorld);
+  const dirIn = (frame: string, from: string, to: string, out: Vector3) => {
+    pos(to, out).sub(pos(from, _c)).normalize();
+    sk.bones[ix[frame]].getWorldQuaternion(_q);
+    return out.applyQuaternion(_q.invert());
+  };
+  const bend = (a: string, b: string, c: string) => {
+    pos(b, _a).sub(pos(a, _c)).normalize();
+    pos(c, _b).sub(pos(b, _c)).normalize();
+    return _a.angleTo(_b);
+  };
+  const set = (k: string, v: number) => {
+    const i = dict[k];
+    if (i !== undefined && sm.morphTargetInfluences) sm.morphTargetInfluences[i] = v;
+  };
+  const deg = Math.PI / 180;
+  return () => {
+    for (const S of ["L", "R"] as const) {
+      const sh = dirIn("chest", `shoulder${S}`, `elbow${S}`, _a).angleTo(S === "L" ? D.shL : D.shR);
+      set(`cShoulder${S}`, smooth01(50 * deg, 150 * deg, sh));
+      set(
+        `cElbow${S}`,
+        smooth01(40 * deg, 130 * deg, bend(`shoulder${S}`, `elbow${S}`, `wrist${S}`) - (S === "L" ? D.elL : D.elR)),
+      );
+      const hi = dirIn("hips", `thigh${S}`, `knee${S}`, _a).angleTo(S === "L" ? D.hiL : D.hiR);
+      set(`cHip${S}`, smooth01(30 * deg, 100 * deg, hi));
+      set(
+        `cKnee${S}`,
+        smooth01(40 * deg, 130 * deg, bend(`thigh${S}`, `knee${S}`, `ankle${S}`) - (S === "L" ? D.knL : D.knR)),
+      );
+    }
+  };
 }

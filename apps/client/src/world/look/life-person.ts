@@ -120,6 +120,11 @@ export class LifePerson {
     this.setMorph("smile", smile);
   }
 
+  /** (plan 131) a face, age and firmness — faceGenes' weights on the file's shapes (the new body's). */
+  setGenes(g: Record<string, number>) {
+    for (const [k, v] of Object.entries(g)) this.setMorph(k, v);
+  }
+
   /** The build alone (the benches: slim, regular, broad), as an avatar's `body` sets it. */
   setBody(body: string) {
     this.setMorph("slim", body === "slim" ? 1 : 0);

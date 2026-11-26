@@ -68,6 +68,16 @@ LOOKS = {
         },
     },
     # GTA V: grounded — everyday proportions, a little older, the face left as people are, lived-in skin
+    # (plan 131 phase 3: the GTA V man at old age — his `old` shape's other end)
+    "gtav-old": {
+        "man": {
+            "muscle": 0.52, "weight": 0.6, "height": 0.53, "proportions": 0.35, "shoulder_slope": 6, "ideal": 0.25,
+            "age_old": 0.85,
+            "race": {"caucasian": 0.85, "african": 0.05, "asian": 0.1},
+            "skin": "skins/old_caucasian_male/old_lightskinned_male_diffuse.png",
+            "face": {"chin/chin-prominent-incr": 0.2, "chin/chin-width-incr": 0.2, "nose/nose-volume-incr": 0.1},
+        },
+    },
     "gtav": {
         "man": {
             "muscle": 0.6, "weight": 0.6, "height": 0.55, "proportions": 0.35, "shoulder_slope": 6, "ideal": 0.25,
