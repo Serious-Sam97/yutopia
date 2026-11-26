@@ -230,3 +230,14 @@ test("the buildings a set of edits would have, without laying them (what a publi
   applyEdits(NO_EDITS);
   assert.ok(!buildingsFor(NO_EDITS).some((b) => b.key === "god-building-x"));
 });
+
+test("a home lot with only its corner on the campus: refused, with why — placing and publishing alike (plan 130)", async () => {
+  const { lotGroundWhy } = await import("./grounds.ts");
+  // (the user's draft: x 39–69, z −34…−4 — the campus is fixed from z −10; its two corners checked before were clear)
+  const corner = { key: "god-lot-9", name: "Lot 9", x0: 39, z0: -34, x1: 69, z1: -4 };
+  assert.match(lotGroundWhy(corner) ?? "", /stays as it is \(The campus/);
+  const e = { ...NO_EDITS, homeLots: { add: [corner] } };
+  assert.ok(checkEdits(e).some((p) => /Lot 9: on ground that stays as it is \(The campus/.test(p)));
+  // (the same lot 7 m north: clear)
+  assert.equal(lotGroundWhy({ ...corner, z0: -41, z1: -11 }), null);
+});

@@ -1,5 +1,5 @@
 import { BASE_HOME_LOTS, type HomeLotDef, inLot, LOT_MAX, LOT_MIN, lotFault, SIGN_REACH } from "@yutopia/shared";
-import { BUILDINGS, HOME_LOTS, terrainAt } from "@yutopia/shared/grounds";
+import { BUILDINGS, HOME_LOTS, lotGroundWhy, terrainAt } from "@yutopia/shared/grounds";
 import type { GroundsEdits } from "@yutopia/shared/grounds-edits";
 import {
   BufferGeometry,
@@ -68,10 +68,14 @@ export class LotsTool {
   }
   /** Why a lot can't go where it is (null: it can). */
   private why(d: HomeLotDef): string | null {
-    return lotFault(d, [
+    const f = lotFault(d, [
       ...HOME_LOTS,
       ...BUILDINGS.map((b) => ({ key: `b:${b.key}`, x0: b.x0, z0: b.z0, x1: b.x1, z1: b.z1 })),
     ]);
+    if (f) return f;
+    // (what Publish checks too: ground that stays as it is — the campus, an anchored building —, the edge, a way)
+    const g = lotGroundWhy(d);
+    return g ? `${g[0].toUpperCase()}${g.slice(1)}.` : null;
   }
   private rect(line: LineLoop, d: HomeLotDef, lift = 0.15) {
     const pts: number[] = [];
@@ -200,7 +204,8 @@ export class LotsTool {
       this.set(l.key, { sign: [snapHalf(at.x), snapHalf(at.z)] });
       return this.setO({ signing: false });
     }
-    if (this.o.sel) return this.setO({ sel: null });
+    // (unpicked: its name and area out of the panel, or the next lot laid takes them — two "Lot 6")
+    if (this.o.sel) return this.setO({ sel: null, name: "", area: "" });
     const d0 = this.host.draft();
     const n = (d0.homeLots?.add ?? []).length;
     let key = `god-lot-${n + 1}`;
@@ -214,7 +219,7 @@ export class LotsTool {
     const why = this.why(d);
     if (why) return toast(why, "warn");
     this.host.change({ ...d0, homeLots: { ...d0.homeLots, add: [...(d0.homeLots?.add ?? []), d] } });
-    this.setO({ sel: key });
+    this.setO({ sel: key, name: d.name, area: d.area ?? "" });
   }
   /** The picked lot changed (moved, sized, renamed) in the draft. */
   set(key: string, c: Partial<Omit<HomeLotDef, "key">>) {
@@ -255,7 +260,7 @@ export class LotsTool {
         ? { ...s, add: (s.add ?? []).filter((l) => l.key !== key) }
         : { ...s, remove: [...(s.remove ?? []).filter((k) => k !== key), key] },
     });
-    this.setO({ sel: null });
+    this.setO({ sel: null, name: "", area: "" });
   }
   hide() {
     this.root.visible = false;

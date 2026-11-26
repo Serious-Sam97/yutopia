@@ -554,7 +554,9 @@ export class GodController {
         return true;
       }
       if (e.key === "Escape") {
-        hud.set({ god: { ...hud.get().god, lots: { ...hud.get().god.lots, sel: null, signing: false } } });
+        hud.set({
+          god: { ...hud.get().god, lots: { ...hud.get().god.lots, sel: null, signing: false, name: "", area: "" } },
+        });
         return true;
       }
     }

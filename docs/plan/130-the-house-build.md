@@ -1107,3 +1107,7 @@ Probe: `e2e/zz-flicker.mts` (a free lot, as Bia; stills of the pad, the fences l
 ### A foundation off the whole metre (11-26)
 
 The user's 12.5 m foundation showed its cap along one side: the floor was drawn by whole metre squares, a square in only if its middle was, so the last half metre had no floor. Now a square a slab's edge crosses off the whole metre is drawn as the slab clipped to it (build.ts `cutCells`, a test in relayout.test.ts). The open-sky map (light3d.ts) and the floor's shade (floors.ts aoCanvas) read such a square by its quarter points, so its half gets the sun and the snow like the rest. Probe: `e2e/zz-halfpad.mts`.
+
+### Lots refused only at Publish (11-26)
+
+The user's draft had a lot (x 39–69, z −34…−4) with its corner 6 m into the campus; Publish refused it with no reason, and God mode had shown it green. Now one check, `lotGroundWhy` (grounds.ts): any of the lot on fixed ground (by rectangle, not three points), past the edge, or on a way — with why. God mode's ghost and the publish check both use it. The draft had two "Lot 6": the panel's name box kept a picked lot's name after it was unpicked, and the next lot laid took it; unpicking now clears it. Test in grounds-buildings.test.ts.

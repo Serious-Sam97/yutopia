@@ -4329,6 +4329,25 @@ export function anchoredAt(x: number, z: number): { key: string; why: string } |
   return ANCHORED_AREAS.find((a) => x >= a.x0 && x < a.x1 && z >= a.z0 && z < a.z1) ?? null;
 }
 
+/** (plan 130) Why a home lot can't lie where it is on the Grounds — any of it on ground that stays as it is, past the
+ *  world's edge, on a way — or null. God mode's ghost and the publish check both ask it. */
+export function lotGroundWhy(
+  d: { x0: number; z0: number; x1: number; z1: number },
+  past: (x: number, z: number) => boolean = (x, z) => beyond(x, z) > 0,
+): string | null {
+  const a = ANCHORED_AREAS.find((q) => d.x0 < q.x1 && d.x1 > q.x0 && d.z0 < q.z1 && d.z1 > q.z0);
+  if (a) return `on ground that stays as it is (${a.why})`;
+  const corners = [
+    [d.x0, d.z0],
+    [d.x1, d.z0],
+    [d.x1, d.z1],
+    [d.x0, d.z1],
+  ];
+  if (corners.some(([x, z]) => past(x, z))) return "past the world's edge";
+  const w = wayOver(d);
+  return w ? `on ${w}` : null;
+}
+
 // ── laying god mode's edits (docs/plan/53-the-god-mode.md § B) ──────────────
 /** How many times edits were laid here: what's made from the Grounds once and kept (the solids'
  *  buckets, the GPS's graph) makes itself again when this moves. */
@@ -4821,14 +4840,8 @@ export function checkEdits(e: GroundsEdits): string[] {
     if (!(e.homeLots?.add ?? []).some((q) => q.key === d.key) && !(d.key in (e.homeLots?.change ?? {}))) continue;
     const f = lotFault(d, [...lots, ...plots.map((b, i) => ({ key: `b${i}`, ...b }))]);
     if (f) no(`${d.name}: ${f}`);
-    const hit = [
-      [d.x0, d.z0],
-      [d.x1, d.z1],
-      [(d.x0 + d.x1) / 2, (d.z0 + d.z1) / 2],
-    ].find(([x, z]) => anchoredHere(x, z) || !inWorld(x, z));
-    if (hit) no(`${d.name}: on ground that stays as it is`);
-    const across = wayOver(d);
-    if (across) no(`${d.name}: on ${across}`);
+    const g = lotGroundWhy(d, (x, z) => !inWorld(x, z));
+    if (g) no(`${d.name}: ${g}`);
   }
   // things
   const tk = new Set<string>();
