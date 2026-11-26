@@ -1,0 +1,6 @@
+Caveat (caveat-latin.woff2: the latin subset, variable weight 400–700, as Google Fonts serves it, v23)
+
+Copyright 2014 The Caveat Project Authors (https://github.com/googlefonts/caveat)
+
+This Font Software is licensed under the SIL Open Font License, Version 1.1.
+The license is available with a FAQ at: https://openfontlicense.org

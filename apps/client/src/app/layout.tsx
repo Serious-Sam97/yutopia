@@ -2,7 +2,6 @@ import type { Metadata, Viewport } from "next";
 import {
   Anton,
   Bebas_Neue,
-  Caveat,
   Cormorant_Garamond,
   IBM_Plex_Mono,
   Inter,
@@ -13,6 +12,7 @@ import {
   Special_Elite,
   VT323,
 } from "next/font/google";
+import localFont from "next/font/local";
 import "./globals.css";
 import "./lamp.css";
 import { LampRoot } from "@/components/LampRoot";
@@ -43,7 +43,15 @@ const interTight = Inter_Tight({
 });
 const oswald = Oswald({ weight: ["300", "400", "500"], subsets: ["latin"], variable: "--font-oswald", preload: false });
 const plexMono = IBM_Plex_Mono({ weight: ["400", "500"], subsets: ["latin"], variable: "--font-plex-mono" });
-const caveat = Caveat({ weight: ["500", "700"], subsets: ["latin"], variable: "--font-caveat", preload: false });
+// (a hand for the notes, Caveat — OFL —: kept here, not fetched at build: Google served its files as /l/font?kit=…
+// links Turbopack can't read, and the prod build failed — 2026-11-26. The latin cut, variable: 500 and 700 from one file)
+const caveat = localFont({
+  src: "./fonts/caveat-latin.woff2",
+  weight: "400 700",
+  variable: "--font-caveat",
+  preload: false,
+  fallback: ["cursive"],
+});
 
 export const metadata: Metadata = {
   title: "Yutopia",
