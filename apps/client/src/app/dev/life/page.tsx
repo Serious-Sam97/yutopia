@@ -17,6 +17,7 @@ import { useEffect, useRef } from "react";
 //   ?face=man|woman              close on that new person's face
 //   ?hour=22                     night: the sun out, a lamp over them
 //   ?style=painted|both          the repainted textures; both: photo and painted side by side
+//   ?style=bs                    plan 131's person on Blender Studio's body (tools/art/life/build_bs.py)
 //   ?blink=1  ?smile=0.6  ?talk=0.5  ?eyes=0.6,0.2   the face held (else the walker's gaze: blinks, looks)
 //   ?wear=tee,jeans,sneakers,hair-crop|dress,boots   (phase 5) each painted person once per outfit, in the
 //                                made garments and hair (wear.py, hair.py), coloured as an avatar
@@ -245,12 +246,14 @@ export default function LifeBench() {
         // (?bodies=1: each painted person slim, regular and broad — plan 73 phase 4)
         const bodies = q.get("bodies") === "1" ? ["slim", "regular", "broad"] : [""];
         for (const v of bodies[0]
-          ? bodies.map(() => "-painted")
+          ? bodies.map(() => (style === "bs" ? "-bs" : "-painted"))
           : style === "both"
             ? ["", "-painted"]
             : style === "painted"
               ? ["-painted"]
-              : [""]) {
+              : style === "bs"
+                ? ["-bs"]
+                : [""]) {
           const lp = await L.loadLifePerson(`/life/person-${g}${v}.glb`, renderer);
           const body = bodies.shift() ?? "";
           if (body) lp.setBody(body);
@@ -278,7 +281,9 @@ export default function LifeBench() {
       // the camera
       const cam = new T.PerspectiveCamera(face ? 22 : 30, w / h, 0.05, 60);
       if (face) {
-        const s = shown.find((x) => x.who === face + (style === "painted" ? "-painted" : "")) ?? shown[0];
+        const s =
+          shown.find((x) => x.who === face + (style === "painted" ? "-painted" : style === "bs" ? "-bs" : "")) ??
+          shown[0];
         // (?bust=1: the head and shoulders — long hair)
         const bust = q.get("bust") === "1";
         // (?at=0.9: the camera's height on them, metres — the hips, the knees)

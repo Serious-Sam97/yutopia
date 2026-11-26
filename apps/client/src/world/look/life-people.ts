@@ -59,6 +59,7 @@ import {
   type WearSpec,
   wornNames,
 } from "./life-wear";
+import { bodySuffix } from "./look-mode";
 import type { Piece, Shader } from "./yulit";
 
 /** Bones beyond chars/rig.ts's 31: each eye, under the head, turned by the gaze. */
@@ -725,7 +726,7 @@ const basesIn = new Map<string, LifeBase>();
 export function lifeBase(gender: LifeGender, renderer: WebGLRenderer): Promise<LifeBase> {
   let p = bases.get(gender);
   if (!p) {
-    p = loadLifeBase(asset(`/life/person-${gender}-painted.glb`), renderer, gender);
+    p = loadLifeBase(asset(`/life/person-${gender}${bodySuffix(gender)}.glb`), renderer, gender);
     bases.set(gender, p);
     p.then(
       (b) => basesIn.set(gender, b),

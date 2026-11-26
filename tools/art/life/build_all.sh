@@ -23,6 +23,17 @@ for who in man woman; do
   # (its far person, plan 73 4.5: one coarse mesh, no textures)
   python3 -I tools/art/life/pack_glb.py "$OUT/person-$who-far.glb" "$OUT/person-$who-far.glb"
 done
+# plan 131: the man on Blender Studio's CC0 body, MakeHuman kept as its cage (the GTA V look; the bundle from
+# download.blender.org, in $BS_BUNDLE) — its three bodies' MakeHuman scenes, then the new person
+BS_BUNDLE=${BS_BUNDLE:-../yutopia-art-src/blender-studio/hbm/human_base_meshes_bundle.blend}
+if [ -f "$BS_BUNDLE" ]; then
+  $B -P tools/art/life/build_person.py -- --who man --look gtav --bare --tex 2048 --out "$TMP" --blend "$TMP/mh-gtav-man.blend" | grep saved
+  for body in slim broad; do
+    $B -P tools/art/life/build_person.py -- --who man --look gtav --bare --tex 512 --body "$body" --out "$TMP" --blend "$TMP/mh-gtav-man-$body.blend" | grep saved
+  done
+  $B -P tools/art/life/build_bs.py -- "$TMP/mh-gtav-man.blend" "$BS_BUNDLE" man "$OUT" | grep wrote
+  python3 -I tools/art/life/pack_glb.py "$OUT/person-man-bs.glb" "$OUT/person-man-bs.glb"
+fi
 # the credits (plan 75): the works by others in what was built → public/credits.json, each file stamped
 # with its own (after the packing: pack_glb rewrites the files)
 python3 tools/credits.py

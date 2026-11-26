@@ -170,6 +170,26 @@ PEOPLE = {
     },
 }
 P = PEOPLE[WHO]
+# (plan 131 phase 0) a look's recipe over the person — the mocks aimed at Sims 4, inZOI and GTA V: its
+# macro sliders, its face (the shared IDEAL scaled by `ideal`, then its own targets), an age (the old
+# targets' share, 0 young … 1 old), its own MakeHuman skin kept as painted (no evening to grey). With
+# --bare the body whole, nothing worn but brows and lashes.
+LOOK = arg("--look", "")
+BARE = "--bare" in argv
+if LOOK:
+    sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+    from mock131 import LOOKS as _LOOKS
+
+    _L = _LOOKS[LOOK][WHO]
+    _face = {k: v * _L.get("ideal", 1.0) for k, v in IDEAL.items()}
+    _face.update(_L.get("face", {}))
+    P.update({k: v for k, v in _L.items() if k not in ("face", "ideal")})
+    P["face"] = _face
+    if "--def" in argv:
+        # (the firmer figure the look's definition is baked from: the same shape, more muscle tone)
+        P["muscle"] = min(1.0, P["muscle"] + 0.3)
+if BARE:
+    P["parts"] = [pp for pp in P["parts"] if pp[0] in ("brows", "lashes", "hair")]  # (the hair for the hairline: mock131 drops it)
 # The three bodies (the avatar's `body`, plan 73 phase 4): slim and broad are the macro sliders moved
 # from the regular build. Each is built with --dump (its posed parts and joints), then the regular
 # build takes them with --morphs as morph targets of the same names, its joints' offsets in the extras.
@@ -346,16 +366,21 @@ def shape(V):
         out[i] += k * d
         used.append((rel, round(k, 3)))
 
+    old = P.get("age_old", 0.0)
     for g, a in gw.items():
+      for age, ak in (("young", 1 - old), ("old", old)):
+        a2 = a * ak
+        if a2 < 1e-4:
+            continue
         for race, r in P["race"].items():
-            add(f"{race}-{g}-young.target", a * r)
+            add(f"{race}-{g}-{age}.target", a2 * r)
         for m, b in mw.items():
             for w, c in ww.items():
-                base = f"{g}-young-{m}muscle-{w}weight"
-                add(f"universal-{base}.target", a * b * c)
+                base = f"{g}-{age}-{m}muscle-{w}weight"
+                add(f"universal-{base}.target", a2 * b * c)
                 for x, e in hw.items():
-                    add(f"height/{base}-{x}height.target", a * b * c * e)
-                add(f"proportions/{base}-idealproportions.target", a * b * c * P["proportions"])
+                    add(f"height/{base}-{x}height.target", a2 * b * c * e)
+                add(f"proportions/{base}-idealproportions.target", a2 * b * c * P["proportions"])
     # the face's own targets, on top
     TT = os.path.join(MH, "targets")
     for rel, k in P.get("face", {}).items():
@@ -1456,7 +1481,8 @@ for name, pos, uv, faces, w, tex in parts:
         timg = next((n.image for n in mat.node_tree.nodes if n.type == "TEX_IMAGE"), None)
         if timg is not None:
             ts = sorted({t for f in faces for t in f[1] if t >= 0})
-            even_skin(timg, tex_mean(timg, np.asarray(uv)[ts]), keep_mask(timg, uv, faces, w))
+            if not LOOK:
+                even_skin(timg, tex_mean(timg, np.asarray(uv)[ts]), keep_mask(timg, uv, faces, w))
             EXTRAS["skin_mean"] = [round(float(x), 4) for x in tex_mean(timg, np.asarray(uv)[ts])]
     # weights onto ours: the top four
     ow = (w @ fold)[used]
@@ -1560,6 +1586,12 @@ def active(name):
 
 
 active("person")
+if LOOK and arg("--blend", ""):
+    # (plan 131 phase 0: the scene kept for mock131.py — its subdivision and bakes — not exported)
+    bpy.ops.file.pack_all()
+    bpy.ops.wm.save_as_mainfile(filepath=os.path.abspath(arg("--blend", "")))
+    print("saved", arg("--blend", ""))
+    sys.exit(0)
 bpy.ops.export_scene.gltf(
     filepath=path,
     use_active_collection=True,

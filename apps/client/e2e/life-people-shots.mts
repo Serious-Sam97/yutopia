@@ -56,7 +56,7 @@ async function open(email: string, look: string, quality: string, w = 1440, h = 
     },
     [tok, quality] as const,
   );
-  await page.goto(`${base}/?look=${look}`);
+  await page.goto(`${base}/?look=${look}${process.env.BODY ? `&body=${process.env.BODY}` : ""}`);
   await page.waitForFunction(
     () => {
       const hud = (window as any).__hud?.get();

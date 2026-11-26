@@ -57,3 +57,9 @@ export const isLifePets = (): boolean => isLife() && !asked("pets", "old");
 export function setLookModeForTest(m: LookMode | null) {
   mode = m;
 }
+
+/** Plan 131: the people's body file — "-painted" (MakeHuman's, plan 73) or "-bs" (Blender Studio's sculpted body
+ *  over a MakeHuman cage). In development `?body=bs` draws the new one where it's built (the man first). */
+export function bodySuffix(gender: "man" | "woman"): string {
+  return gender === "man" && asked("body", "bs") ? "-bs" : "-painted";
+}

@@ -24,6 +24,8 @@ docker/livekit.local.yaml
 # CI or the images can build them (2026-11-10); but the photo-skinned people, which the game never loads
 apps/client/public/life/person-man.glb
 apps/client/public/life/person-woman.glb
+# plan 131's phase-0 mocks (tools/art/life/mock131.py): static figures for /dev/life/p131 only
+apps/client/public/life/p131/
 __pycache__/
 # the decoders three loads at run time, copied by tools/decoders.mjs
 apps/client/public/decoders/
