@@ -1,6 +1,6 @@
 "use client";
 
-import { type HomeLotDef, lotGround, lotOf, lotRole, STOREY_RISES, type StoreyRise } from "@yutopia/shared";
+import { type HomeLotDef, lotGround, lotRole, STOREY_RISES, type StoreyRise } from "@yutopia/shared";
 import { useState } from "react";
 import { useLang } from "@/lib/i18n";
 import { hud, useHud } from "@/world/store";
@@ -16,10 +16,9 @@ const WORDS: Record<string, [string, string]> = {
   claim: ["Claim this lot", "Pegar este terreno"],
   notNow: ["Not now", "Agora não"],
   pitch: [
-    "Yours to build on. One lot each — you can let roommates build here too, and give it back any time.",
-    "Seu para construir. Um terreno por pessoa — você pode deixar colegas construírem aqui também, e devolver quando quiser.",
+    "Yours to build on — you can let roommates build here too, and give it back any time.",
+    "Seu para construir — você pode deixar colegas construírem aqui também, e devolver quando quiser.",
   ],
-  haveOne: ["You have {name} already: one lot each.", "Você já tem o {name}: um terreno por pessoa."],
   yours: ["{name} · yours", "{name} · seu"],
   whose: ["{name}'s lot", "Terreno de {name}"],
   mates: ["Roommates", "Colegas"],
@@ -63,7 +62,6 @@ export function LotCard({ objectId }: { objectId: string }) {
   const uid = w.myUid();
   const g = lotGround(st, lot.key);
   const role = lotRole(st, lot.key, uid);
-  const mineAlready = lotOf(st, uid);
   const send = (type: string, m: Record<string, unknown>) => (w.send as (t: string, m: unknown) => void)(type, m);
   const people = w.room
     ? [...w.room.state.players.values()].filter((p) => !p.bot && p.uid !== uid && p.uid !== g?.claim?.owner)
@@ -94,29 +92,23 @@ export function LotCard({ objectId }: { objectId: string }) {
       {!g?.claim && (
         <>
           <p className="text-sm leading-snug">{tt("pitch")}</p>
-          {mineAlready && mineAlready !== lot.key ? (
-            <p className="text-sm" style={{ color: "var(--amber)" }}>
-              {tt("haveOne", { name: w.G?.HOME_LOTS.find((l) => l.key === mineAlready)?.name ?? "" })}
-            </p>
-          ) : (
-            <div className="flex gap-2">
-              <button
-                type="button"
-                className="ghost-btn flex-1 py-2"
-                style={{ color: "var(--good)", borderColor: "var(--good)", fontWeight: 700 }}
-                data-testid="lot-claim"
-                onClick={() => {
-                  send("lot:claim", { key: lot.key });
-                  close();
-                }}
-              >
-                {tt("claim")}
-              </button>
-              <button type="button" className={btn} onClick={close}>
-                {tt("notNow")}
-              </button>
-            </div>
-          )}
+          <div className="flex gap-2">
+            <button
+              type="button"
+              className="ghost-btn flex-1 py-2"
+              style={{ color: "var(--good)", borderColor: "var(--good)", fontWeight: 700 }}
+              data-testid="lot-claim"
+              onClick={() => {
+                send("lot:claim", { key: lot.key });
+                close();
+              }}
+            >
+              {tt("claim")}
+            </button>
+            <button type="button" className={btn} onClick={close}>
+              {tt("notNow")}
+            </button>
+          </div>
         </>
       )}
       {g?.claim && (role || isAdmin) && (
@@ -203,7 +195,7 @@ export function LotCard({ objectId }: { objectId: string }) {
                 type="button"
                 className={btn}
                 onClick={() => {
-                  send("lot:go", {});
+                  send("lot:go", { key: lot.key });
                   close();
                 }}
               >

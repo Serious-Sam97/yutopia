@@ -10,6 +10,7 @@ import {
   lotGround,
   lotOf,
   lotRole,
+  lotsOf,
   lotsFix,
   lotWhy,
   releaseOps,
@@ -133,4 +134,15 @@ test("a lot's size and place: 12–48 m a side, on nothing else", () => {
   assert.match(lotFault({ ...lot, key: "x", x1: lot.x0 + 8 }, []) ?? "", /12 m/);
   assert.match(lotFault({ ...lot, key: "x", x1: lot.x0 + 60 }, []) ?? "", /48 m/);
   assert.match(lotFault({ ...lot, key: "x" }, BASE_HOME_LOTS) ?? "", /another lot/);
+});
+
+test("one person, as many lots as they claim (no limit, 2026-11-26): each theirs, one given back leaves the rest", () => {
+  const [a, b] = BASE_HOME_LOTS;
+  let st = applyOps(empty(), claimOps(empty(), a, bia, 0) ?? []);
+  st = applyOps(st, claimOps(st, b, bia, 0) ?? []);
+  assert.deepEqual(lotsOf(st, bia.uid), [a.key, b.key]);
+  assert.equal(lotRole(st, b.key, bia.uid), "owner");
+  st = applyOps(st, releaseOps(st, a.key));
+  assert.deepEqual(lotsOf(st, bia.uid), [b.key]);
+  assert.equal(lotOf(st, bia.uid), b.key);
 });

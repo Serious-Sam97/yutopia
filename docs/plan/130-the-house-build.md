@@ -1111,3 +1111,7 @@ The user's 12.5 m foundation showed its cap along one side: the floor was drawn 
 ### Lots refused only at Publish (11-26)
 
 The user's draft had a lot (x 39–69, z −34…−4) with its corner 6 m into the campus; Publish refused it with no reason, and God mode had shown it green. Now one check, `lotGroundWhy` (grounds.ts): any of the lot on fixed ground (by rectangle, not three points), past the edge, or on a way — with why. God mode's ghost and the publish check both use it. The draft had two "Lot 6": the panel's name box kept a picked lot's name after it was unpicked, and the next lot laid took it; unpicking now clears it. Test in grounds-buildings.test.ts.
+
+### Lots each: no limit (11-26)
+
+The user changed F1a's "one lot each": a person claims as many free lots as they like (asked, "No limit"). `lotsOf` (homes.ts) lists them; `lotOf` is the first. The server no longer refuses a second claim, an admin giving someone a lot no longer frees their other one, and "Go to my lot" goes to the lot whose card it's pressed on. Freeing someone's lot was already there: an admin opens the lot's card (by its sign) and presses Free it. Test in homes.test.ts; checked live as Bia (two lots claimed, gone to the second, both given back — `e2e/zz-twolots.mts`).

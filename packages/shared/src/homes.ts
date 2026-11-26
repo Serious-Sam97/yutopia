@@ -77,8 +77,14 @@ export function lotGround(st: Structure, key: string): Floor | null {
 }
 /** The lot `uid` has, or null. */
 export function lotOf(st: Structure, uid: number): string | null {
-  for (const f of st.floors) if (isHomeSpace(f.space) && f.claim?.owner === uid) return homeKeyOf(f.space);
-  return null;
+  return lotsOf(st, uid)[0] ?? null;
+}
+/** Every lot `uid` owns (their keys): as many as they've claimed — no limit (decided 2026-11-26). */
+export function lotsOf(st: Structure, uid: number): string[] {
+  const out: string[] = [];
+  for (const f of st.floors)
+    if (isHomeSpace(f.space) && f.claim?.owner === uid && !out.includes(homeKeyOf(f.space))) out.push(homeKeyOf(f.space));
+  return out;
 }
 /** The lot a floor is of (its key), or null: not a lot's. */
 export const lotOfFloor = (st: Structure, level: number): string | null => {

@@ -95,8 +95,8 @@ registerFeature((room: WorldRoom) => {
     const p = me(client);
     const lot = lotBy(m?.key);
     if (!p || !lot || p.bot) return;
-    const has = lotOf(room.structure, p.uid);
-    if (has) return warn(client, has === lot.key ? "It's yours already." : "One lot each — give yours back first.");
+    // (as many as they like: no limit — 2026-11-26)
+    if (lotRole(room.structure, lot.key, p.uid) === "owner") return warn(client, "It's yours already.");
     if (lotGround(room.structure, lot.key)) return warn(client, "Someone's claimed it already.");
     if (!claimFor(lot, { uid: p.uid, name: p.name })) return warn(client, "No room in the world for another house.");
     say(client, `${lot.name} is yours. Press B to build.`);
@@ -203,8 +203,6 @@ registerFeature((room: WorldRoom) => {
     const uid = Number(m?.uid);
     const them = [...room.state.players.values()].find((q) => q.uid === uid && !q.bot);
     if (!them) return warn(client, "They have to be here.");
-    const has = lotOf(room.structure, uid);
-    if (has && has !== lot.key) release(has);
     const g = lotGround(room.structure, lot.key);
     if (g?.claim) {
       const ops = claimSetOps(room.structure, lot.key, {
@@ -225,10 +223,11 @@ registerFeature((room: WorldRoom) => {
     if (release(lot.key)) say(client, `${lot.name} is free again.`);
   });
 
-  // (to my lot: by its sign, on the land)
-  room.on("lot:go", (client) => {
+  // (to my lot — the one asked for, if it's mine or I room there; else my first —: by its sign, on the land)
+  room.on("lot:go", (client, m) => {
     const p = me(client);
-    const key = p ? lotOf(room.structure, p.uid) : null;
+    const asked = typeof m?.key === "string" && p && lotRole(room.structure, m.key, p.uid) ? m.key : null;
+    const key = asked ?? (p ? lotOf(room.structure, p.uid) : null);
     const lot = key ? lotBy(key) : null;
     if (!p || !lot) return warn(client, "You haven't a lot yet.");
     const s = lotSign(lot);
