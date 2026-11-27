@@ -446,3 +446,213 @@ Left over:
   doesn't show yet: it needs the old skin (phase 4).
 - **Height (F2) is left out.** The rig's legs are fitted to `moves.ts` constants, so a scaled person would
   break contacts and IK. That needs its own pass.
+
+## Phase 4 — the skin by age (2026-11-26)
+
+- **MakeHuman's old light-skinned male skin** is read through the cage at the same texels as the young one. Its
+  light over the young skin's (each with its own region's tone divided out), with the contrast drawn out ×3, goes
+  into the skin texture's **alpha** (÷1.5).
+- **In the game**, `chars/life.ts ownPiece(…, age)` mixes it in by the person's `lifeOld` (their `faceGenes` age)
+  after the map: `colour *= mix(1, a·1.5, old)`. The benches do the same through `LifePerson.setGenes`. The body
+  is marked by the file's extras `base: "blender-studio"`, which also sets `LifeBase.kind = "bs"`.
+- An old man now shows the lines round his eyes and mouth: `design/screens/life/p131/faces-age/`.
+- **Skin colour** is the avatar's, as before: the texture ÷ its mean × the avatar's skin.
+
+## Phase 5 — what's worn on the new body (2026-11-26)
+
+- **The look's MakeHuman scene with every garment:** `build_person.py --look gtav --bare --wear all --blend
+  …-wear.blend`. build_bs.py takes it, and finds the twins under the bare name.
+- **Every piece moves with the cage:** 111 files, 144 pieces (garments, hairs, beards, eyewear, extras). Each
+  takes the variety shapes of the skin it sits over (nearest body vertex), but only those that move it by more
+  than 4 mm (each shape on every piece made the wardrobe 86 MB).
+- **The body's zones and beard densities.** `_wear` and `_neck` are kinds, taken from the nearest cage vertex;
+  `_beardA/B/C` are blended through the cage. The skin under clothes hides as it did.
+- **Written to `public/life/wear-man-bs/`** (42 MB packed, against 24 MB for MakeHuman's). Garment textures are
+  capped at 1024. `life-people.ts garment()` loads from `wear-<who>-bs` when the base is `kind: "bs"`. Budgets:
+  hair and beard files ×2.2 for the new body (the full beard 1.5 MB, the afro 2.6 MB), with the budget test
+  covering `wear-man-bs`.
+- Stills: `0c/dressed*.png` (tee/jeans, hoodie/cargo/curly/full beard, coat/shirt/beanie) and
+  `game2/lot-12.png` (`?body=bs` in the world): dressed, the skin hidden under clothes.
+- **Known:** a beanie on a bald head stands off the scalp, because hats are cut to sit over the fullest hair, as
+  before.
+
+Left: phase 6 (the editor's face and age sliders, premade faces), 7 (the far person and LODs for the new body,
+frame cost on M1 Low, memcheck), 8 (checks; the e2e near people, run with `?body=bs`), then the woman by the
+same path (F11b), and making the new body the default (dropping `?body=bs`).
+
+## Phase 6 — the editor (2026-11-26)
+
+- **`AvatarLayers.face`** (shared `avatar.ts`, `FACE_RE`): "" means from their name's seed; otherwise 24 whole
+  numbers −9…9 (the 22 face axes ×0.15, then age ÷9 and firmness ×0.1). The API validates the same, with
+  `Avatars::DEFAULT face ''`. `faceOf(avatar, seed)` decodes it and `faceCode` encodes it. The faces' code
+  (`FACE_AXES`, `faceGenes`, `PREMADE_FACES`) moved into `@yutopia/shared`, so the editor's page reads it
+  without three; `life-people.ts` re-exports it.
+- **The editor's new tab "Face/Rosto":**
+  - "Start from": from my name, or one of six premade faces;
+  - "Age and build": age and firmness;
+  - the 22 face axes as sliders.
+- Checked on `/avatar?body=bs` as Bia (`e2e/zz-face-editor131.mts`): Rugged set the sliders and was saved
+  through the API (`0,0,5,…,3,0`); her own face was put back. Stills: `p131/editor-*.png`.
+
+## Phase 7 — the cost (2026-11-26)
+
+- **The still shapes are baked per person.** Face, age, firmness, slim/broad and the coat are added once into
+  the person's own copy of each part's positions (`LifeLook.bakedOf`), and those shapes are dropped. Only the
+  live ones stay: blink, talk, smile, the correctives. First person's arms are left as they are (they swap
+  cuts).
+  - Trap: a part left with no shapes must have no morph lists at all. An empty list turns three's morph code
+    on without a count, the shader doesn't compile, and the piece isn't drawn.
+- **`/dev/life/crowd`** (`e2e/zz-crowd131.mts`, 40 people, M1 Metal render ms with the GPU waited for):
+  - all near: MakeHuman 13.8, new body (men) 14.4;
+  - the game's mix (16 near, 24 far): 9.4 against 9.3, i.e. equal.
+
+  Baking also made today's people cheaper: all near went from 14.1 to 13.8.
+- **The far person** stays MakeHuman's coarse mesh (at that distance the bodies read the same). A far mesh made
+  from the new body is a follow-up.
+
+## Phase 8 — checks (2026-11-26)
+
+- `playwright.bs.config.ts`: every spec's page with `localStorage["yutopia:body"] = "bs"` (dev only, on top of
+  the life config).
+- **The people specs on the new body:** avatar, people-3d, sway, third-person, first-person, emote-wheel,
+  water, moves-seen. 6 passed and 5 skipped; 2 failed in the batch (third-person's two players at
+  `page.goto("/")`, and emote-wheel). Rerun alone, both pass, with the new body and with today's: loading
+  flakes, not regressions.
+- **Left:**
+  - the woman, by the same path once the man is signed off (F11b);
+  - making the new body the default (dropping `?body=bs`);
+  - a far person from the new body;
+  - height (F2) against the rig's leg constants;
+  - a beanie on a bald head stands off the scalp.
+
+## The woman (F11b, after the man's sign-off — 2026-11-26)
+
+- **The same path:** `mock131.py` gains `gtav-old` for the woman, and her GTA V look's photo skin is now
+  MakeHuman's light one (the game tints it; a dark one lifted to a light skin ran out of range). Her age detail
+  comes from `old_caucasian_female`. Six scenes: the look with every garment, slim, broad, firmer, old, plus
+  the bare look. Then `build_bs.py … woman`. Files: `person-woman-bs.glb` (2.82 MB packed) and
+  `wear-woman-bs/` (111 files, 36 MB).
+- **Fixes found on her, which help the man too:**
+  - Pink texels round the eyes (the MakeHuman lid's inside read where the cage's lid folds) are evened to
+    their surroundings.
+  - A garment's vertex that isn't on an arm now moves by the cage's own non-arm skin. A trouser's hip by the
+    hanging hand had taken the hand's move and stood out in a flap.
+- **`?body=bs` and `localStorage["yutopia:body"]` now switch both people.** `build_all.sh` builds both. The
+  budget test covers `wear-woman-bs` (beards' triangles ×1.05: her full beard is 16.1k).
+- Stills: `design/screens/life/p131/woman/` (body, face, blink, talking, bodies, dressed) and
+  `woman-faces/sheet-faces.png` (six seeds: faces apart, the old one lined); `game4/lot-12.png` (the world).
+- Tests: 124 look/chars tests pass. Trap: never `| head` a Blender pipe; it killed a build silently.
+
+## Double check (2026-11-26, the user: "double check all")
+
+Checked:
+- **Correctives in the game's own rig** (`/dev/anim?body=bs`): read from the live meshes. Hanging gives
+  cShoulder 1.0; the crouch gives cKnee 0.4–0.7 and cHip 0.5. Only the live shapes stay on the body (blink,
+  talk, smile, the 8 correctives); the still ones are baked.
+- **The face code end to end** (`e2e/zz-face-seen131.mts`): a bad code is refused (422); Bia's code is saved
+  and Ana's world shows it on Bia; Bia's face is put back.
+- **Typecheck:** client, world server, shared.
+- **Unit tests:** client 493/494 (the one red is the HUD colours test, flagging plans 124, 125 and 130's
+  `BuildTab`/`Lamp*`; not this plan's files); shared 965/965; world server's world/schema 16/16.
+- **People e2e with both new bodies:** avatar, people-3d, sway, first-person, third-person and water: 7
+  passed, 4 skipped. An earlier batch's avatar red passes alone. `actions.spec` fails with today's body too.
+
+Found and fixed:
+1. **NPC looks dropped `face`.** The admin NPC editor shows the Face tab, but `Npc::LOOK` didn't keep it. It
+   is now validated as the player's is.
+2. **The editor's preview and Face tab ignored the name's seed.** "From my name" showed a different face from
+   the world's. `nameSeed` moved to shared; the turntable and `AvatarEditor` take `seedName` (the player's own
+   name on /avatar, the NPC's on the cast page). The sliders now start from the face the name gives.
+3. **The woman's lower lip folded talking.** Her lip's inside lay on the jaw line's soft edge. Inside the mouth
+   bag, plain facing now decides (straight down stays, straight up goes, between by height); at the slit, each
+   lip's own face goes with its jaw.
+4. **The zones (`_wear`) came from the cage's nearest vertex.** A raised arm's skin took the trunk's kind and
+   hid under a tank top. The kind is now decided by the new body's own weights, and the place along the limb
+   from the cage's vertices of that kind.
+5. **The painted sample shorts showed under real garments** (dark bands at the thighs). They are only painted
+   on a bare build now.
+6. **Garments' weights were the cage's**, so cloth and skin parted at the shoulders and hips: strips of shorts
+   rose with the arms, and a tank's armhole tore. Each cloth vertex now takes the new skin's weights round it
+   (8 nearest). Sleeves read the whole skin; the rest only the trunk's and the legs', with no more arm share
+   than the garment's own. Swinging joints (skirt, hair, pack, scarf) keep their share.
+7. **Cloth sunk into the sculpt's muscles.** Cloth within 2 cm inside the new skin is pushed out to 1.5 mm,
+   against the trunk's skin only for what isn't a sleeve (pushed off the hanging arm, it spiked).
+   - Tried and dropped: mapping each cloth vertex onto the cage's surface point under it. It made lumps and
+     flaps by the armpits and elbows. Positions stay as in phase 5: moved by the cage's own non-arm skin.
+
+Stills: `design/screens/life/p131/check/sheet-check.png` (both bodies: arms raised, crouch, sitting, the heart,
+dressed, talking).
+
+## The hands — 2026-11-27
+
+The user: the new body's fingers are bizarre; compare every clip's fingers with today's body (plan 78 fixed
+those). Tools: `e2e/zz-hands131.mts` (every clip of /dev/anim at 1.2 s, the hand-heavy ones at 2.4 s too, the
+right hand from its back and from the person's side, today's body beside the new one; sheets of ten rows,
+`--woman`, `--only="a|b"`), `e2e/zz-thumb131.mts` (one moment, six sides), `e2e/zz-spread131.mts` (the fan by
+bones and by mesh), `e2e/zz-sheets-render.mts`, and `hand-report.mts --bs`. Dumps: `BS_HANDS=…npz` (after the
+hand fit) and `BS_WEIGHTS=…npz` (after the weights) stop `build_bs.py` early.
+
+What was wrong, each found on the sheets or by plotting both hands' points and joints:
+1. **The cage's fingers went onto the wrong ones.** They were matched by direction alone: MakeHuman's thumb
+   went onto the new index, its ring onto the new thumb. And **the rig's finger joints stayed MakeHuman's**,
+   moved only with the wrist, so the fingers bent about points that weren't their knuckles (splayed, twisted,
+   tips folded flat). New `tools/art/life/hand_fit.py`:
+   - finds the five tips on each hand by persistence of the distance over the surface from the wrist (points
+     under 4 mm apart joined: the new mesh's nails have doubled vertices);
+   - labels them (the thumb is the farthest from the others; the four in order from its side);
+   - finds the webs (the saddles where neighbouring fingers meet).
+   The joints are placed on the new hand, and the cage's hand is moved onto them bone by bone before the
+   shrink-wrap.
+2. **The wrist joint sat 4.7 cm into the palm** (the landmark was a box mean; the palm's points are denser). It
+   is now at the far end of the arm's narrowest stretch (`wrist_at`), as MakeHuman's is, before the bone heat
+   and the posing. The new hand is 18.9 cm (the woman's 18.8); MakeHuman's was 20.4 (16.7).
+3. **The joints zigzagged across the fingers** (rest bends +14° to −29°): each was centred in a slice of a
+   coarse mesh (9 mm edges). They now lie on each finger's centre as a smooth curve (quadratics through its
+   slices' middles, run back into the palm along its near half's chord). Rest bends now −9 to −22° at the
+   knuckle, as MakeHuman's −17 to −25°.
+4. **The fist closed as a claw.** The knuckles sat at the webs: MakeHuman's own knuckle row is at its deep webs,
+   and taken over as it was, it landed on the new hand's shallow ones. The row is now 9% of the hand's length
+   back from the webs (a real knuckle's joint is ~1.7 cm before its web), each finger off it as MakeHuman's are
+   off one another. Each knuckle is kept in the middle 30–70% of the hand's thickness. The palm normal is
+   turned toward the thumb's side (the SVD's sign had flipped the depth share).
+5. **The thumb was a flap.** The cage's thumb lay on one face of the new one, and the far face read the palm
+   (the wrist). Every finger and thumb vertex is now weighted on the new mesh: by its nearest finger's joints,
+   shared over 5 mm (the thumb 12 mm) across each joint, the wrist's before the knuckle. These weights fade
+   into the carried ones away from the fingers' lines, and over the thumb's first stretch.
+6. **Open hands splayed.** The new hand rests with its fingers spread (the ring 7° and the little 4° wider). Each
+   finger is turned in the palm's plane about its knuckle to MakeHuman's fan, and the thumb onto MakeHuman's
+   line in the hand's frame. A wave's fan by the bones: 5/3/12° → 1/4/8° (today's 1/4/8°).
+7. **The whole hand rested 17° off MakeHuman's** (its line and its palm's normal: it was posed by a landmark
+   point), so every clip's hand came out turned. It is turned onto MakeHuman's frame about the wrist.
+
+8. **The skin smeared on the hands** after the turns above (dark red marks across the knuckles): the skin is
+   read off the cage by place, and the hands had been turned away from it. It is read with the hands where
+   they were before the turns (`P_SKIN`).
+
+One build in this round stopped silently right after opening its scene, and an hour of stills and a survey ran
+on the previous file. The scratch build script now stops when Blender writes nothing; the results below are from
+a rebuild.
+
+Checks:
+- **The sheets:** every clip, both bodies, man and woman: `design/screens/life/p131/hands/`.
+- **The hand report survey** (every clip at 0.8, 2 and 3.2 s, both hands, 768 hands): out of range today 173,
+  new 242. The wrist's side to side is better (47 → 31). "Thumb into its own hand" is up (61 → 137), but its
+  depth matches today's (deepest 1.2 cm against 1.1; the line is 0.6): the thumb resting on a finger, which the
+  report counts as entering the hand. "Into the other hand" is 20 → 30 at today's depths (2.0 against 2.1 cm;
+  two-handed holds).
+- The joint angles are the same on both rigs, as they should be (the fist: knuckles 87°, middles 98°).
+
+Left: **the phone call on the man.** The new arm is proportioned differently: upper arm 31 cm against
+MakeHuman's 24.5, forearm 22.6 against 25.7. To bring the phone to the ear, the arm solver lifts the elbow forward
+and up (29 cm in front of the head, against today's 19), and the phone lies along the cheek instead of toward
+the mouth. A pole far enough back to fix it (`CALL_POLE`) also moves today's signed-off call, so it stays as it
+was. The woman's call looks like today's. The arm's reaches were all tuned on MakeHuman's arm: retuning them for
+the new arm is its own step (with making the new body the default).
+
+## The default — 2026-11-27
+
+The user tried both people on :3100 and asked for the new body as the default: `bodySuffix` (look/look-mode.ts)
+now gives `-bs` everywhere, prod included. Today's body stays one switch away in development — `?body=old`, or
+`localStorage["yutopia:body"] = "old"` — and its files (person-*-painted.glb, wear-man/, wear-woman/) stay in
+the tree. `playwright.bs.config.ts` went with the old switch: the e2e draw the new body as they are. Still open:
+the man's phone call (the new arm's reaches, above).

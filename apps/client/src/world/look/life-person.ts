@@ -5,7 +5,18 @@
 // drives it as it drives today's people, and the gaze's blink and look (setFace, setEyes) too. The
 // benches' person; the game's is PersonModel's (phase 4.3).
 import type { AvatarLayers } from "@yutopia/shared";
-import { Bone, Group, Matrix4, type Mesh, Quaternion, Skeleton, SkinnedMesh, Vector3, type WebGLRenderer } from "three";
+import {
+  Bone,
+  Group,
+  type Material,
+  Matrix4,
+  type Mesh,
+  Quaternion,
+  Skeleton,
+  SkinnedMesh,
+  Vector3,
+  type WebGLRenderer,
+} from "three";
 import { type Euler3, JOINTS, type Pose, REST } from "../chars/rig";
 import {
   ALL_BONES,
@@ -123,6 +134,27 @@ export class LifePerson {
   /** (plan 131) a face, age and firmness — faceGenes' weights on the file's shapes (the new body's). */
   setGenes(g: Record<string, number>) {
     for (const [k, v] of Object.entries(g)) this.setMorph(k, v);
+    // (the old skin's detail by their age, as chars/life.ts ownPiece mixes it: the body's material their own)
+    for (const sm of this.meshes) {
+      const m = sm.material as Material;
+      if (sm.name !== "body" || !m.userData.lifeAge) continue;
+      const mine = m.clone();
+      const before = m.onBeforeCompile;
+      const old = g.old ?? 0;
+      mine.onBeforeCompile = (sh, r) => {
+        before.call(m, sh, r);
+        sh.uniforms.lifeOld = { value: old };
+        sh.fragmentShader = sh.fragmentShader
+          .replace("#include <common>", "#include <common>\nuniform float lifeOld;")
+          .replace(
+            "#include <map_fragment>",
+            "#include <map_fragment>\n#ifdef USE_MAP\ndiffuseColor.rgb *= mix( 1.0, texture2D( map, vMapUv ).a * 1.5, lifeOld );\ndiffuseColor.a = opacity;\n#endif",
+          );
+      };
+      const key = m.customProgramCacheKey.bind(m);
+      mine.customProgramCacheKey = () => `${key()}-age`;
+      sm.material = mine;
+    }
   }
 
   /** The build alone (the benches: slim, regular, broad), as an avatar's `body` sets it. */

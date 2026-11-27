@@ -18,6 +18,8 @@ class Avatars
         'outer' => 'none', 'outerColor' => '#4f6b5a', 'topPattern' => 'none', 'topColor2' => '#2a2420',
         'bottomPattern' => 'none', 'bottomColor2' => '#2a2420', 'outerPattern' => 'none', 'outerColor2' => '#2a2420',
         'shoesColor2' => '#f4efe6',
+        // the face and age on the new body (plan 131): '' from their name's seed, else 24 numbers −9…9
+        'face' => '',
     ];
 
     public function for(User $user): array

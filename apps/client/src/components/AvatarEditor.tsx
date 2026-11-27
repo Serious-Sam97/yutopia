@@ -5,7 +5,12 @@ import {
   type AvatarLayers,
   avatarFromSeed,
   CLOTH_COLORS,
+  FACE_AXES,
+  faceCode,
+  faceOf,
   HAIR_COLORS,
+  nameSeed,
+  PREMADE_FACES,
   SKIN_TONES,
 } from "@yutopia/shared";
 import { useEffect, useState } from "react";
@@ -146,10 +151,12 @@ const NAMES: Record<string, [string, string]> = {
   boxed: ["Boxed beard", "Barba aparada"],
   satchel: ["Leather satchel", "Bolsa de couro"],
 };
-type Tab = "body" | "hair" | "top" | "bottom" | "feet" | "extras";
+type Tab = "body" | "face" | "hair" | "top" | "bottom" | "feet" | "extras";
 // (the tabs' names live here, not in i18n.ts: the editor is out of the world page)
 const TABS: { id: Tab; name: [string, string] }[] = [
   { id: "body", name: ["Body", "Corpo"] },
+  // (plan 131: the face and age on the new body)
+  { id: "face", name: ["Face", "Rosto"] },
   { id: "hair", name: ["Hair", "Cabelo"] },
   { id: "top", name: ["Top", "Em cima"] },
   { id: "bottom", name: ["Bottom", "Embaixo"] },
@@ -289,7 +296,10 @@ export function AvatarEditor({
   stacked = false,
   onChange,
   title,
+  seedName,
 }: {
+  /** (plan 131) whose look: their name seeds their face — the preview's, and the Face tab's start */
+  seedName?: string;
   initial: AvatarLayers;
   onSave?: (a: AvatarLayers) => Promise<void>;
   stacked?: boolean;
@@ -336,7 +346,7 @@ export function AvatarEditor({
           border: "1px solid var(--well-edge)",
         }}
       >
-        <AvatarCanvas avatar={a} size={stacked ? 150 : 300} walk={walk} />
+        <AvatarCanvas avatar={a} size={stacked ? 150 : 300} walk={walk} seedName={seedName} />
       </div>
       <div className={stacked ? "flex flex-col gap-2 flex-1 justify-end" : ""}>
         <div className={stacked ? "flex flex-col gap-2" : "flex gap-2 mt-3"}>
@@ -405,6 +415,7 @@ export function AvatarEditor({
         ))}
       </div>
       <div className="space-y-5" role="tabpanel">
+        {tab === "face" && <FacePanel a={a} pt={pt} set={set} seed={seedName ? nameSeed(seedName) : 0} />}
         {ROWS.filter((row) => row.tab === tab && (!row.when || row.when(a))).map((row) => {
           const field = (row.field ?? row.shape) as keyof AvatarLayers;
           const title = row.name ? row.name[pt ? 1 : 0] : t(row.label as Key);
@@ -514,5 +525,115 @@ export function AvatarEditor({
       {preview}
       {options}
     </div>
+  );
+}
+
+// ── plan 131: the face and age ──────────────────────────────────────────────────────────────────────
+
+const AXIS_NAMES: Record<string, [string, string]> = {
+  fNoseW: ["Nose width", "Largura do nariz"],
+  fNoseL: ["Nose length", "Comprimento do nariz"],
+  fNoseHump: ["Nose bridge", "Cavalete do nariz"],
+  fNoseTip: ["Nose tip", "Ponta do nariz"],
+  fNostrils: ["Nostrils", "Narinas"],
+  fJawW: ["Jaw width", "Largura do maxilar"],
+  fChinOut: ["Chin forward", "Queixo para frente"],
+  fChinH: ["Chin height", "Altura do queixo"],
+  fCheekBones: ["Cheekbones", "Maçãs do rosto"],
+  fCheekFull: ["Cheeks", "Bochechas"],
+  fEyeSize: ["Eye size", "Tamanho dos olhos"],
+  fEyeTilt: ["Eye tilt", "Inclinação dos olhos"],
+  fEyeOpen: ["Eye opening", "Abertura dos olhos"],
+  fBrowH: ["Brow height", "Altura das sobrancelhas"],
+  fBrowAngle: ["Brow angle", "Ângulo das sobrancelhas"],
+  fMouthW: ["Mouth width", "Largura da boca"],
+  fLipUpper: ["Upper lip", "Lábio de cima"],
+  fLipLower: ["Lower lip", "Lábio de baixo"],
+  fFaceFat: ["Face fullness", "Rosto cheio"],
+  fHeadLong: ["Head length", "Comprimento da cabeça"],
+  fEarSize: ["Ear size", "Tamanho das orelhas"],
+  fEarOut: ["Ears out", "Orelhas de abano"],
+};
+const PRESET_NAMES: Record<string, [string, string]> = {
+  classic: ["Classic", "Clássico"],
+  gentle: ["Gentle", "Suave"],
+  rugged: ["Rugged", "Marcante"],
+  narrow: ["Narrow", "Fino"],
+  round: ["Round", "Redondo"],
+  elder: ["Elder", "Idoso"],
+};
+
+function FacePanel({
+  a,
+  pt,
+  set,
+  seed,
+}: {
+  a: AvatarLayers;
+  pt: boolean;
+  set: (p: Partial<AvatarLayers>) => void;
+  seed: number;
+}) {
+  // (their face now: their saved one, or the one their name gives — a slider moved starts from it)
+  const g = faceOf(a, seed);
+  const put = (k: string, v: number) => set({ face: faceCode({ ...g, [k]: v }) });
+  const slider = (k: string, label: string, min: number, max: number, step: number) => (
+    <label key={k} className="flex items-center gap-3 text-xs" style={{ color: "var(--cream-dim)" }}>
+      <span className="w-44 shrink-0">{label}</span>
+      <input
+        type="range"
+        min={min}
+        max={max}
+        step={step}
+        value={g[k] ?? 0}
+        onChange={(e) => put(k, Number(e.target.value))}
+        className="flex-1"
+        aria-label={label}
+      />
+    </label>
+  );
+  return (
+    <>
+      <fieldset>
+        <legend className="mono text-[11.5px] uppercase tracking-[.06em] mb-2.5" style={{ color: "var(--amber)" }}>
+          {pt ? "Começar de" : "Start from"}
+        </legend>
+        <div className="flex flex-wrap gap-2">
+          <button
+            type="button"
+            className="deck-btn"
+            aria-pressed={!a.face}
+            style={{ height: 34, fontSize: 12.5 }}
+            onClick={() => set({ face: "" })}
+          >
+            {pt ? "Do meu nome" : "From my name"}
+          </button>
+          {Object.entries(PREMADE_FACES).map(([k, v]) => (
+            <button
+              key={k}
+              type="button"
+              className="deck-btn"
+              style={{ height: 34, fontSize: 12.5 }}
+              onClick={() => set({ face: faceCode({ old: 0, muscle: 0, ...v }) })}
+            >
+              {PRESET_NAMES[k]?.[pt ? 1 : 0] ?? k}
+            </button>
+          ))}
+        </div>
+      </fieldset>
+      <fieldset className="space-y-2">
+        <legend className="mono text-[11.5px] uppercase tracking-[.06em] mb-2.5" style={{ color: "var(--amber)" }}>
+          {pt ? "Idade e corpo" : "Age and build"}
+        </legend>
+        {slider("old", pt ? "Idade" : "Age", 0, 1, 1 / 9)}
+        {slider("muscle", pt ? "Firmeza" : "Firmness", -0.9, 0.9, 0.1)}
+      </fieldset>
+      <fieldset className="space-y-2">
+        <legend className="mono text-[11.5px] uppercase tracking-[.06em] mb-2.5" style={{ color: "var(--amber)" }}>
+          {pt ? "Rosto" : "Face"}
+        </legend>
+        {FACE_AXES.map((k) => slider(k, AXIS_NAMES[k]?.[pt ? 1 : 0] ?? k, -1.35, 1.35, 0.15))}
+      </fieldset>
+    </>
   );
 }

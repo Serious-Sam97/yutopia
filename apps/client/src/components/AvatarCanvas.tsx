@@ -15,11 +15,14 @@ export function AvatarCanvas({
   size = 160,
   spin = true,
   walk = false,
+  seedName,
 }: {
   avatar: AvatarLayers;
   size?: number;
   spin?: boolean;
   walk?: boolean;
+  /** (plan 131) whose look: their name seeds their face (and a neutral look's body), as in the world */
+  seedName?: string;
 }) {
   const C = useChars();
   const ref = useRef<HTMLCanvasElement>(null);
@@ -73,7 +76,7 @@ export function AvatarCanvas({
       });
       // a three-quarter view, turning slowly
       const yaw = 0.55 + (spin && !reduced ? t * 0.55 : 0);
-      if (!pics.turntable(c, a, yaw, mo)) {
+      if (!pics.turntable(c, a, yaw, mo, seedName)) {
         // (the life look: their clothes' files still coming — drawn once they're in, 5.6; only without
         // WebGL the drawing instead)
         if (pics.lifeLook() && pics.canDraw()) {
@@ -86,7 +89,7 @@ export function AvatarCanvas({
     };
     raf = requestAnimationFrame(draw);
     return () => cancelAnimationFrame(raf);
-  }, [C, a, spin, walk, gl]);
+  }, [C, a, spin, walk, gl, seedName]);
   return (
     <div
       style={{

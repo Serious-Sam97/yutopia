@@ -43,6 +43,8 @@ class Npc extends Model
         'style', 'gender', 'eyewear', 'eyewearColor', 'extra', 'extraColor', 'shoes', 'shoesColor', 'beard', 'gait',
         'stance', 'outer', 'outerColor', 'topPattern', 'topColor2', 'bottomPattern', 'bottomColor2', 'outerPattern',
         'outerColor2', 'shoesColor2',
+        // the face and age on the new body (plan 131): 24 numbers −9…9, or '' (from their name)
+        'face',
     ];
 
     public const KEY = '/^[a-z0-9][a-z0-9-]{0,39}$/';
@@ -147,6 +149,13 @@ class Npc extends Model
             foreach (self::LOOK as $k) {
                 $v = $sentLook[$k] ?? null;
                 if (! is_string($v)) {
+                    continue;
+                }
+                if ($k === 'face') {
+                    if (preg_match('/^(-?[0-9](,-?[0-9]){23})?$/', $v)) {
+                        $look[$k] = $v;
+                    }
+
                     continue;
                 }
                 $colour = $k === 'skin' || str_contains($k, 'Color');

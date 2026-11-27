@@ -51,7 +51,10 @@ class WorldController extends Controller
             'bottomPattern' => ['sometimes', ...$slug], 'bottomColor2' => ['sometimes', ...$hex],
             'outerPattern' => ['sometimes', ...$slug], 'outerColor2' => ['sometimes', ...$hex],
             'shoesColor2' => ['sometimes', ...$hex],
+            // the face and age on the new body (plan 131): empty — from their name — or 24 numbers −9…9
+            'face' => ['sometimes', 'nullable', 'string', 'regex:/^-?[0-9](,-?[0-9]){23}$/'],
         ]);
+        $layers['face'] ??= '';
         $layers['style'] = 'ligne';
         $user = $request->user();
         Avatar::updateOrCreate(['user_id' => $user->id], ['layers' => $layers]);

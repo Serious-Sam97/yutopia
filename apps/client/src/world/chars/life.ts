@@ -19,8 +19,10 @@
 import { type AvatarLayers, DEFAULT_AVATAR } from "@yutopia/shared";
 import {
   type Bone,
+  type BufferAttribute,
   BufferGeometry,
   Color,
+  Float32BufferAttribute,
   type Material,
   Matrix4,
   MeshBasicMaterial,
@@ -109,12 +111,8 @@ function hangsOn(g: BufferGeometry, joint: number): boolean {
 
 const trisOf = (g: BufferGeometry) => (g.getIndex()?.count ?? g.getAttribute("position").count) / 3;
 
-/** A seed from a name (who a neutral avatar is drawn as: the same wherever they're drawn). */
-export function nameSeed(name: string): number {
-  let h = 2166136261;
-  for (let i = 0; i < name.length; i++) h = Math.imul(h ^ name.charCodeAt(i), 16777619);
-  return h >>> 0;
-}
+// (who a neutral avatar is drawn as, and their face: the seed from their name — @yutopia/shared since plan 131)
+export { nameSeed } from "@yutopia/shared";
 
 // ── what reaches need of a body: where the hand goes to the ear, the mouth, the chest (wrist targets),
 // from today's person of the same gender and build, scaled to this one's height off the joint they
@@ -170,11 +168,28 @@ interface OwnU {
   lifeWater: { value: number };
   /** their eyes' colour (the eyes' piece reads it: look/life-people.ts eyePiece) */
   lifeIris: { value: Color };
+  /** (plan 131) their age, 0…1: how much of the old skin's detail (the skin texture's alpha) shows */
+  lifeOld: { value: number };
 }
-function ownPiece(u: OwnU, then: Piece | null): Piece {
+function ownPiece(u: OwnU, then: Piece | null, age = false): Piece {
   return {
-    key: `life-own${then ? `+${then.key}` : ""}`,
+    key: `life-own${age ? "-age" : ""}${then ? `+${then.key}` : ""}`,
     patch(sh: Shader, r) {
+      if (age) {
+        // (plan 131 phase 4) the old skin's detail by their age: the texture's alpha is its light over the
+        // young skin's (÷1.5); the colour include's map has already put the young skin on
+        sh.uniforms.lifeOld = u.lifeOld;
+        sh.fragmentShader = sh.fragmentShader
+          .replace("#include <common>", "#include <common>\nuniform float lifeOld;")
+          .replace(
+            "#include <map_fragment>",
+            `#include <map_fragment>
+#ifdef USE_MAP
+diffuseColor.rgb *= mix( 1.0, texture2D( map, vMapUv ).a * 1.5, lifeOld );
+diffuseColor.a = opacity;
+#endif`,
+          );
+      }
       sh.uniforms.lifeTint = u.lifeTint;
       sh.uniforms.lifeWater = u.lifeWater;
       sh.uniforms.lifeIris = u.lifeIris;
@@ -305,6 +320,8 @@ export class LifeLook {
   private u: OwnU;
   /** (plan 131) the face, age and firmness their seed gives — the new body's shapes */
   private genes: Record<string, number>;
+  /** (plan 131 phase 7) each part's geometry with their still shapes in — theirs, disposed with them */
+  private bakedGeos: BufferGeometry[] = [];
 
   constructor(
     M: LifeMod,
@@ -317,12 +334,14 @@ export class LifeLook {
     /** (phase 5.4) what they wear: their wardrobe's garments, made — none, the file's own outfit */
     worn: import("../look/life-people").LifeWorn | null = null,
   ) {
-    this.genes = M.faceGenes(seed);
+    this.genes = M.faceOf(avatar, seed);
     this.u = {
       lifeTint: { value: new Color(1, 1, 1) },
       lifeWater: { value: -1e6 },
       lifeIris: { value: M.irisOf(seed) },
+      lifeOld: { value: 0 },
     };
+    this.u.lifeOld.value = this.genes.old ?? 0;
     this.M = M;
     this.gender = base.gender;
     this.eyeTurn = [M.EYE_YAW, M.EYE_PITCH];
@@ -507,7 +526,7 @@ export class LifeLook {
         own.userData = { ...p.material.userData };
         this.mine.push(own);
       }
-      const piece = ownPiece(this.u, (own.userData.lifePiece as Piece | undefined) ?? null);
+      const piece = ownPiece(this.u, (own.userData.lifePiece as Piece | undefined) ?? null, !!own.userData.lifeAge);
       // (no snow's layer or a way's wet on a person: the rain's on them is the view's — mood.wetOf)
       own.userData.wx = "none";
       h.lit(own, piece);
@@ -545,7 +564,10 @@ export class LifeLook {
   private addMesh(i: number): void {
     const b = this.bound;
     if (!b) return;
-    const { part, geometry, own } = this.parts[i];
+    const { part, own } = this.parts[i];
+    // (plan 131 phase 7) the shapes that never change for this person — their face, age, firmness, build — added
+    // into their own copy of the positions once: three's vertex shader runs every live shape each frame
+    const geometry = this.bakedOf(i);
     const sm = new SkinnedMesh(geometry, own);
     sm.name = `life-${part.name}`;
     sm.castShadow = !/^(eyes|lashes|brows|teeth|tongue)$/.test(part.name);
@@ -555,7 +577,9 @@ export class LifeLook {
     sm.boundingSphere = new Sphere(new Vector3(0, this.height * 0.5, 0), this.height * 0.75);
     if (part.name === "brows" || /beard/.test(part.name)) sm.renderOrder = 2;
     sm.updateMorphTargets();
-    sm.morphTargetDictionary = { ...part.morphs };
+    sm.morphTargetDictionary = {
+      ...((geometry.userData.lifeMorphs as Record<string, number> | undefined) ?? part.morphs),
+    };
     sm.bindMode = "attached";
     sm.bind(b.skeleton, new Matrix4());
     b.root.add(sm);
@@ -699,7 +723,60 @@ export class LifeLook {
     return this.height - this.body.at.head.y;
   }
 
+  /** The part's geometry with this person's still shapes added in (shared — untouched — when it has none). */
+  private bakedOf(i: number): BufferGeometry {
+    const src = this.parts[i].geometry;
+    const dict = this.parts[i].part.morphs;
+    // (first person's arms swap between their cuts: kept as they are, every shape live)
+    if (this.part === "arms") return src;
+    const still: Record<string, number> = { ...this.genes, slim: this.body.morph.slim, broad: this.body.morph.broad };
+    if (this.body.morph.coat !== undefined) still.coat = this.body.morph.coat;
+    const morphs = src.morphAttributes.position;
+    if (!morphs?.length) return src;
+    const bake = Object.keys(dict).filter((k) => k in still);
+    if (!bake.length) return src;
+    const pos = src.getAttribute("position") as BufferAttribute;
+    const out = new Float32Array(pos.count * 3);
+    for (let v = 0; v < pos.count; v++) {
+      out[v * 3] = pos.getX(v);
+      out[v * 3 + 1] = pos.getY(v);
+      out[v * 3 + 2] = pos.getZ(v);
+    }
+    for (const k of bake) {
+      const w = still[k] ?? 0;
+      if (!w) continue;
+      const m = morphs[dict[k]] as BufferAttribute;
+      for (let v = 0; v < m.count; v++) {
+        out[v * 3] += w * m.getX(v);
+        out[v * 3 + 1] += w * m.getY(v);
+        out[v * 3 + 2] += w * m.getZ(v);
+      }
+    }
+    const g = new BufferGeometry();
+    for (const [k, a] of Object.entries(src.attributes)) g.setAttribute(k, a);
+    g.setAttribute("position", new Float32BufferAttribute(out, 3));
+    g.setIndex(src.getIndex());
+    // (the live shapes only: blink, talk, smile, the correctives — renumbered)
+    const keep = Object.keys(dict).filter((k) => !bake.includes(k));
+    // (none left: no shape lists at all — an empty one still turns three's morph code on, with no count: the
+    // shader didn't compile and the piece wasn't drawn)
+    if (keep.length) {
+      g.morphAttributes.position = keep.map((k) => morphs[dict[k]]);
+      const nm = src.morphAttributes.normal;
+      if (nm) g.morphAttributes.normal = keep.map((k) => nm[dict[k]]);
+    }
+    g.morphTargetsRelative = src.morphTargetsRelative;
+    g.boundingBox = src.boundingBox;
+    g.boundingSphere = src.boundingSphere;
+    g.userData.lifeMorphs = Object.fromEntries(keep.map((k, j) => [k, j]));
+    for (const gr of src.groups) g.addGroup(gr.start, gr.count, gr.materialIndex);
+    this.bakedGeos.push(g);
+    return g;
+  }
+
   dispose(): void {
+    for (const g of this.bakedGeos) g.dispose();
+    this.bakedGeos.length = 0;
     for (const sm of [...this.meshes, ...this.depth.values(), ...this.edges.values()]) sm.removeFromParent();
     this.edges.clear();
     this.meshes.length = 0;

@@ -170,7 +170,13 @@ export function NpcEditor({
       )}
       {shown === "look" && npc.look && (
         // (keyed by who: a new person's editor starts from their look)
-        <AvatarEditor key={npc.key} initial={npc.look} title={w("lookTitle")} onChange={(look) => set({ look })} />
+        <AvatarEditor
+          key={npc.key}
+          initial={npc.look}
+          title={w("lookTitle")}
+          onChange={(look) => set({ look })}
+          seedName={npc.name}
+        />
       )}
       {shown === "lines" && <Lines npc={npc} pt={pt} onLines={(lines) => set({ lines })} w={w} />}
       {shown === "behaviour" && <Behaviour npc={npc} setB={setB} w={w} two={two} />}

@@ -13,6 +13,8 @@ export default function AvatarPage() {
   const t = useTr();
   const router = useRouter();
   const [a, setA] = useState<AvatarLayers>(DEFAULT_AVATAR);
+  // (plan 131: their name seeds their face, as the world draws it)
+  const [name, setName] = useState<string | undefined>(undefined);
 
   useEffect(() => {
     if (!getToken()) router.replace("/login?next=/avatar");
@@ -20,6 +22,11 @@ export default function AvatarPage() {
       yutopia
         .avatar()
         .then((r) => setA(r.avatar))
+        .catch(() => {});
+    if (getToken())
+      yutopia
+        .me()
+        .then((r) => setName(r.user.name))
         .catch(() => {});
   }, [router]);
 
@@ -37,7 +44,7 @@ export default function AvatarPage() {
             ← {t("back")}
           </Link>
         </header>
-        <AvatarEditor initial={a} onSave={save} />
+        <AvatarEditor initial={a} onSave={save} seedName={name} />
       </div>
     </main>
   );

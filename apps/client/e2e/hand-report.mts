@@ -6,7 +6,7 @@
 // turns in toward the palm, its tip's distance to the index's base), the wrist's bend (up and down, side to
 // side) and its twist against the forearm; and the hand against the other hand, the head and the trunk
 // (each finger's bones as capsules), the deepest it goes into any.
-//   node --experimental-strip-types e2e/hand-report.mts "label|clip|t|R|kind" … [--woman]
+//   node --experimental-strip-types e2e/hand-report.mts "label|clip|t|R|kind" … [--woman] [--bs]
 // (the tips' joint, DIP, read off its bone's own turn: no point past it)
 //   kinds: relaxed, clap, held (on what it holds: the contact, not the joints), grip, fist, flat, phone, any
 import { chromium } from "@playwright/test";
@@ -85,6 +85,8 @@ const ALWAYS: Record<string, Range> = {
 
 const args = process.argv.slice(2);
 const woman = args.includes("--woman");
+// (plan 131: the new body, Blender Studio's)
+const bsBody = args.includes("--bs");
 const items = args.filter((a) => !a.startsWith("--"));
 const b = await chromium.launch({
   channel: "chromium",
@@ -100,7 +102,8 @@ for (const it of items) {
     await p.goto(
       `http://localhost:3100/dev/anim?clip=${encodeURIComponent(clip)}&live=1&compare=0&trail=0&play=0&view=side` +
         (woman ? "&gender=feminine" : "&gender=masculine&hair=short") +
-        "&look=life",
+        "&look=life" +
+        (bsBody ? "&body=bs" : ""),
     );
     await p.waitForFunction(() => (window as any).__anim?.ready === true, null, { timeout: 180_000 });
     await p.waitForTimeout(4500);

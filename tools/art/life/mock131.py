@@ -77,6 +77,12 @@ LOOKS = {
             "skin": "skins/old_caucasian_male/old_lightskinned_male_diffuse.png",
             "face": {"chin/chin-prominent-incr": 0.2, "chin/chin-width-incr": 0.2, "nose/nose-volume-incr": 0.1},
         },
+        "woman": {
+            "muscle": 0.44, "weight": 0.58, "height": 0.48, "proportions": 0.4, "ideal": 0.4, "age_old": 0.85,
+            "race": {"african": 0.75, "caucasian": 0.15, "asian": 0.1},
+            "skin": "skins/old_caucasian_female/old_lightskinned_female_diffuse.png",
+            "face": {"cheek/{s}-cheek-bones-incr": 0.2},
+        },
     },
     "gtav": {
         "man": {
@@ -89,7 +95,9 @@ LOOKS = {
         "woman": {
             "muscle": 0.5, "weight": 0.56, "height": 0.5, "proportions": 0.4, "ideal": 0.4, "age_old": 0.08,
             "race": {"african": 0.75, "caucasian": 0.15, "asian": 0.1},
-            "skin": "skins/young_african_female/young_darkskinned_female_diffuse.png",
+            # (a light skin's photo: the game tints it to the avatar's skin — a dark one lifted to a light skin
+            # ran out of range, plan 73 4.2)
+            "skin": "skins/young_caucasian_female/young_lightskinned_female_diffuse.png",
             "face": {"cheek/{s}-cheek-bones-incr": 0.2},
         },
     },

@@ -662,7 +662,13 @@ function Bench({ q }: { q: URLSearchParams }) {
             };
             return { key: h.key, root: h.root, gap };
           },
-          closeUp: (bone: string, from: [number, number, number], fov = 30, look?: "held") => {
+          closeUp: (
+            bone: string,
+            from: [number, number, number],
+            fov = 30,
+            look?: "held",
+            target?: { x: number; y: number; z: number },
+          ) => {
             const b = after.bone(bone as never);
             if (!b) return null;
             after.root.updateMatrixWorld(true);
@@ -670,7 +676,13 @@ function Bench({ q }: { q: URLSearchParams }) {
             const c = new T.PerspectiveCamera(fov, renderer.domElement.width / renderer.domElement.height, 0.01, 50);
             c.position.set(at.x + from[0], at.y + from[1], at.z + from[2]);
             // (from the bone toward the thing held: an eye's view of it)
-            c.lookAt(look === "held" && heldNow?.root ? heldNow.root.getWorldPosition(new T.Vector3()) : at);
+            c.lookAt(
+              target
+                ? new T.Vector3(target.x, target.y, target.z)
+                : look === "held" && heldNow?.root
+                  ? heldNow.root.getWorldPosition(new T.Vector3())
+                  : at,
+            );
             renderer.render(scene, c);
             const url = renderer.domElement.toDataURL("image/png");
             renderer.render(scene, cam);

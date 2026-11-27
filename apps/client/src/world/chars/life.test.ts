@@ -38,6 +38,7 @@ function fakeBase(): M.LifeBase {
   at.eyeR = at.head.clone().add(new Vector3(-0.032, 0.07, 0.08));
   return {
     gender: "man",
+    kind: "mh",
     at,
     bodies: {},
     skinMean: new Color(0.72, 0.72, 0.72),

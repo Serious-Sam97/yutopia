@@ -121,6 +121,8 @@ export interface LifePart {
 
 export interface LifeBase {
   gender: LifeGender;
+  /** (plan 131) which body: "mh" (MakeHuman's, plan 73) or "bs" (Blender Studio's over a MakeHuman cage) */
+  kind: "mh" | "bs";
   /** where each joint stands, the regular body (metres, the person facing +z, feet at y 0) */
   at: Record<BoneName, Vector3>;
   /** each other body's joint offsets from `at` */
@@ -395,61 +397,8 @@ const IRISES: [number, string][] = [
   [0.07, "#62707a"], // grey
   [0.05, "#7a5a2a"], // amber
 ];
-/** Plan 131 (F2): a face and an age from a seed — each face axis of the new body's file (`f…`, −1…1), its age
- *  (`old`, 0…1: most young, some middle-aged, a few old) and its build's firmness (`muscle`). The same seed gives
- *  the same person wherever they're drawn; a file without the shapes ignores them. */
-export const FACE_AXES = [
-  "fNoseW",
-  "fNoseL",
-  "fNoseHump",
-  "fNoseTip",
-  "fNostrils",
-  "fJawW",
-  "fChinOut",
-  "fChinH",
-  "fCheekBones",
-  "fCheekFull",
-  "fEyeSize",
-  "fEyeTilt",
-  "fEyeOpen",
-  "fBrowH",
-  "fBrowAngle",
-  "fMouthW",
-  "fLipUpper",
-  "fLipLower",
-  "fFaceFat",
-  "fHeadLong",
-  "fEarSize",
-  "fEarOut",
-] as const; // fmt: skip
-export function faceGenes(seed: number): Record<string, number> {
-  // (a small PRNG of its own: mulberry32)
-  let a = (seed ^ 0x9e3779b9) >>> 0;
-  const rnd = () => {
-    a = (a + 0x6d2b79f5) >>> 0;
-    let t = a;
-    t = Math.imul(t ^ (t >>> 15), t | 1);
-    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
-    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
-  };
-  const out: Record<string, number> = {};
-  // (triangular, −1.3…1.3: most faces near the middle, some far off it)
-  for (const k of FACE_AXES) out[k] = (rnd() + rnd() - 1) * 1.3;
-  const r = rnd();
-  out.old = r < 0.62 ? rnd() * 0.12 : r < 0.9 ? 0.3 + rnd() * 0.25 : 0.75 + rnd() * 0.25;
-  out.muscle = (rnd() - 0.4) * 0.9;
-  return out;
-}
-
-/** (plan 131 F2) premade faces to start from — the editor's (phase 6): face axes and an age; a seed fills the rest */
-export const PREMADE_FACES: Record<string, Partial<Record<(typeof FACE_AXES)[number] | "old" | "muscle", number>>> = {
-  classic: { fJawW: 0.4, fChinOut: 0.3, fNoseW: -0.2, fCheekBones: 0.4, fBrowH: -0.2 },
-  gentle: { fFaceFat: 0.4, fCheekFull: 0.5, fJawW: -0.4, fEyeSize: 0.4, fNoseTip: 0.4 },
-  rugged: { fJawW: 0.8, fChinOut: 0.6, fNoseHump: 0.7, fBrowH: -0.5, fBrowAngle: -0.4, old: 0.35 },
-  narrow: { fHeadLong: 0.8, fJawW: -0.6, fNoseL: 0.6, fNoseW: -0.5, fMouthW: -0.4 },
-  round: { fHeadLong: -0.7, fFaceFat: 0.7, fCheekFull: 0.7, fNoseW: 0.5, fChinH: -0.4 },
-  elder: { old: 0.9, fCheekFull: -0.4, fEyeOpen: -0.3, fNoseL: 0.3 },
-};
+// (plan 131: the faces' code lives in @yutopia/shared — the editor's page reads it without three)
+export { FACE_AXES, faceCode, faceGenes, faceOf, PREMADE_FACES } from "@yutopia/shared";
 
 export function irisOf(seed: number): Color {
   let x = ((seed >>> 0) % 1000) / 1000;
@@ -691,6 +640,8 @@ export async function loadLifeBase(url: string, renderer: WebGLRenderer, gender:
     wear?: Record<string, WearSpec>;
     wear_lm?: WearLm;
     wear_files?: string[];
+    /** (plan 131) "blender-studio": the new body — its skin's alpha holds the old skin's detail */
+    base?: string;
   } = {};
   scene.traverse((o: Object3D) => {
     const life = (o.userData as { life?: string }).life;
@@ -733,6 +684,7 @@ export async function loadLifeBase(url: string, renderer: WebGLRenderer, gender:
     // (the exporter's duplicates: "hair.001" → "hair_1")
     const name = m.name.replace(/[._]\d+$/, "");
     const material = finish(name, m.material as MeshStandardMaterial, !!g.getAttribute("color"), extras.iris ?? null);
+    if (name === "body" && extras.base === "blender-studio") material.userData.lifeAge = true;
     if (name === "teeth" || name === "tongue") givePiece(material, mouthPiece(g.boundingBox?.max.z ?? 0));
     parts.push({
       name,
@@ -745,6 +697,7 @@ export async function loadLifeBase(url: string, renderer: WebGLRenderer, gender:
   socksUnder(parts);
   return {
     gender,
+    kind: extras.base === "blender-studio" ? "bs" : "mh",
     at,
     bodies: extras.bodies ?? {},
     skinMean: srgb(extras.skin_mean, [0.7, 0.5, 0.4]),
@@ -829,11 +782,14 @@ export function lifeFar(gender: LifeGender, renderer: WebGLRenderer): Promise<Li
 // (each garment's file, loaded once a gender: its parts, or null if it didn't load)
 const garments = new Map<string, Promise<LifePart[] | null>>();
 const garmentsIn = new Map<string, LifePart[] | null>();
-function garment(gender: LifeGender, name: string, renderer: WebGLRenderer): Promise<LifePart[] | null> {
-  const key = `${gender}/${name}`;
+function garment(base: LifeBase, name: string, renderer: WebGLRenderer): Promise<LifePart[] | null> {
+  const gender = base.gender;
+  // (plan 131: the new body's wardrobe, moved onto it — wear-<who>-bs)
+  const dir = `${gender}${base.kind === "bs" ? "-bs" : ""}`;
+  const key = `${dir}/${name}`;
   let p = garments.get(key);
   if (!p) {
-    p = loadLifeBase(asset(`/life/wear-${gender}/${name}.glb`), renderer, gender).then(
+    p = loadLifeBase(asset(`/life/wear-${dir}/${name}.glb`), renderer, gender).then(
       (b) => b.parts,
       (e) => {
         console.warn(`life wear: ${key} didn't load`, e);
@@ -893,8 +849,8 @@ export function lifeWornNow(base: LifeBase, a: AvatarLayers, renderer: WebGLRend
   const parts: LifePart[] = [];
   let waiting = false;
   for (const f of filesOf(base, names)) {
-    void garment(base.gender, f, renderer);
-    const got = garmentsIn.get(`${base.gender}/${f}`);
+    void garment(base, f, renderer);
+    const got = garmentsIn.get(`${base.gender}${base.kind === "bs" ? "-bs" : ""}/${f}`);
     if (got === undefined) waiting = true;
     else if (got) parts.push(...got);
   }
@@ -915,9 +871,7 @@ export function lifeWornNow(base: LifeBase, a: AvatarLayers, renderer: WebGLRend
 /** What an avatar wears (the benches: lifeWornNow, waited for). */
 export async function lifeWorn(base: LifeBase, a: AvatarLayers, renderer: WebGLRenderer): Promise<LifeWorn | null> {
   if (!base.wearFiles.length) return null;
-  await Promise.all(
-    filesOf(base, wornNames(a, base.wear, base.wearFiles)).map((f) => garment(base.gender, f, renderer)),
-  );
+  await Promise.all(filesOf(base, wornNames(a, base.wear, base.wearFiles)).map((f) => garment(base, f, renderer)));
   return lifeWornNow(base, a, renderer);
 }
 
@@ -928,7 +882,7 @@ export async function lifeWornOf(
   renderer: WebGLRenderer,
   pattern?: WearPattern,
 ): Promise<LifeWorn> {
-  const loaded = await Promise.all(filesOf(base, names).map((f) => garment(base.gender, f, renderer)));
+  const loaded = await Promise.all(filesOf(base, names).map((f) => garment(base, f, renderer)));
   return { names, parts: loaded.flatMap((p) => p ?? []), renderer, pattern };
 }
 

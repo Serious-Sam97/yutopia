@@ -205,11 +205,18 @@ class Pictures {
 
   /** Someone on a stand into a (square-ish) canvas, turned `yaw`, posed by `mo` (a Motion3's output).
    *  (The middle level of detail: plenty at a HUD picture's size.) */
-  turntable(target: HTMLCanvasElement, avatar: AvatarLayers, yaw: number, mo?: PictureMotion | null): boolean {
+  turntable(
+    target: HTMLCanvasElement,
+    avatar: AvatarLayers,
+    yaw: number,
+    mo?: PictureMotion | null,
+    /** (plan 131) whose: their name seeds a neutral look's body and their face, as in the world */
+    name?: string,
+  ): boolean {
     const size = Math.min(target.width, target.height);
     const res = INK.res.value.clone();
     const px = INK.px.value;
-    const l = this.picture(avatar, 1, yaw, size, mo);
+    const l = this.picture(avatar, 1, yaw, size, mo, name ? nameSeed(name) : 0);
     const gl = this.renderer;
     if (l && gl) {
       const h = l.model.height;

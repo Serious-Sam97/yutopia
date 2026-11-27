@@ -213,7 +213,7 @@ export default function LifeBench() {
             // (plan 74's line-up: a `body-slim` / `body-broad` token in an outfit sets that person's body)
             const body = names.find((n) => n.startsWith("body-"))?.slice(5);
             const worn = names.filter((n) => !n.startsWith("body-"));
-            const lp = await L.loadLifePerson(`/life/person-${g}-painted.glb`, renderer, a, { names: worn, pattern });
+            const lp = await L.loadLifePerson(`/life/person-${g}${style === "bs" ? "-bs" : "-painted"}.glb`, renderer, a, { names: worn, pattern });
             if (body) lp.setBody(body);
             shown.push({
               root: lp.root,
